@@ -144,3 +144,44 @@ NEXT SESSION:
 - All 51 features are passing (100% complete)
 - No pending features to implement
 - App is in working state with clean code
+
+=== Session: 2026-01-29 (Session 5) ===
+Status: 51/51 features passing (100%)
+
+REGRESSION TESTING:
+- Feature #6 (Attendee cannot access DJ-only API endpoints): PASSED
+  - POST /api/events without auth -> 401 "Authentication required"
+  - PUT /api/events/:id/requests/:id/status without auth -> 401 "Authentication required"
+  - Both DJ-only endpoints properly reject unauthenticated requests
+
+- Feature #21 (DJ sidebar navigation - Queue link): PASSED
+  - Registered new DJ (regression5@test.com / TestDJ_Regression5)
+  - Created event "REGRESSION_TEST_EVENT_5" (2026-08-15, Regression Hall)
+  - Navigated to event management page
+  - Clicked "Queue" in sidebar -> URL changed to /events/:id/manage/queue
+  - Queue button showed active state
+
+- Feature #12 (Bulk reject requests requires confirmation): PASSED
+  - Submitted 3 songs via attendee page (Bohemian Rhapsody, Shake It Off, Happy)
+  - Selected 2 requests via checkboxes in DJ queue management
+  - "Reject Selected (2)" button appeared
+  - Clicked -> confirmation dialog with count and warning message
+  - Cancel dismissed dialog, no changes made
+  - Confirm rejected both, moved to "Processed (2)" with "rejected" status
+  - Third request remained in "Pending (1)"
+
+CONSOLE ERRORS: None (zero errors at error level)
+
+ALL REGRESSION TESTS PASSED. No regressions found.
+
+SUMMARY:
+- All 51 features remain passing (100% complete)
+- No new features to implement
+- No bugs discovered
+- Zero console errors
+- App is in working state with clean code
+
+NEXT SESSION:
+- All 51 features are passing (100% complete)
+- No pending features to implement
+- App is in working state with clean code
