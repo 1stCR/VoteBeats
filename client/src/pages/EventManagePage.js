@@ -602,6 +602,23 @@ export default function EventManagePage() {
               });
             }
 
+            // Warning: Queue health — less than 30 minutes of music queued (amber)
+            if (event?.status === 'active') {
+              const queueMs = queuedRequests.reduce((sum, r) => sum + (r.song?.durationMs || 0), 0);
+              const queueMin = Math.floor(queueMs / 60000);
+              if (queueMs < 30 * 60 * 1000) {
+                actionItems.push({
+                  urgency: 'warning',
+                  icon: Clock,
+                  message: queueMin === 0
+                    ? 'Queue has no music — add songs to keep the dance going'
+                    : 'Only ' + queueMin + ' minute' + (queueMin !== 1 ? 's' : '') + ' of music queued — add songs to keep the dance going',
+                  action: 'View Pending',
+                  onAction: () => navigate('/events/' + id + '/manage/pending'),
+                });
+              }
+            }
+
             // Sort by urgency: critical first, then warning
             actionItems.sort((a, b) => {
               const order = { critical: 0, warning: 1 };
