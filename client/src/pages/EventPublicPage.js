@@ -180,6 +180,10 @@ export default function EventPublicPage() {
 
   function handleManualSubmit() {
     if (!manualTitle.trim() || !manualArtist.trim()) return;
+    if (votingCountdown?.closed) {
+      alert('Voting has closed. The final playlist is set!');
+      return;
+    }
     handleSubmitRequest({
       trackName: manualTitle.trim(),
       artistName: manualArtist.trim(),
@@ -198,6 +202,10 @@ export default function EventPublicPage() {
   }
 
   async function handleSubmitRequest(song) {
+    if (votingCountdown?.closed) {
+      alert('Voting has closed. The final playlist is set!');
+      return;
+    }
     try {
       await api.submitRequest(eventId, {
         songTitle: song.trackName || song.title,
@@ -367,6 +375,14 @@ export default function EventPublicPage() {
         <div className="bg-white dark:bg-slate-800 rounded-b-xl shadow-sm border border-t-0 border-slate-200 dark:border-slate-700 p-4 mb-8">
           {activeTab === 'request' && (
             <div>
+              {votingCountdown?.closed ? (
+                <div className="text-center py-12">
+                  <ListMusic className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Voting has closed</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">The final playlist is set!</p>
+                </div>
+              ) : (
+                <>
               {genrePrompt && (
                 <div id="variety-prompt" className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                   <p className="text-sm text-amber-700 dark:text-amber-300">
@@ -520,6 +536,8 @@ export default function EventPublicPage() {
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none resize-none"
                 />
               </div>
+                </>
+              )}
             </div>
           )}
 
@@ -584,7 +602,12 @@ export default function EventPublicPage() {
                           </div>
                           <button
                             onClick={() => handleVote(req.id)}
-                            className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded-full hover:bg-primary-100 dark:hover:bg-primary-900 transition-colors"
+                            disabled={votingCountdown?.closed}
+                            className={`flex items-center gap-1 px-2 py-1 text-xs rounded-full transition-colors ${
+                              votingCountdown?.closed
+                                ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                                : 'bg-slate-200 dark:bg-slate-600 hover:bg-primary-100 dark:hover:bg-primary-900'
+                            }`}
                           >
                             <ThumbsUp className="w-3 h-3" />
                             {req.voteCount || 0}
@@ -670,8 +693,11 @@ export default function EventPublicPage() {
                           </div>
                           <button
                             onClick={() => handleVote(req.id)}
+                            disabled={votingCountdown?.closed}
                             className={`flex items-center gap-1 px-2 py-1 text-xs rounded-full transition-colors ${
-                              req.votedByUser
+                              votingCountdown?.closed
+                                ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                                : req.votedByUser
                                 ? 'bg-primary-500 text-white'
                                 : 'bg-slate-200 dark:bg-slate-600 hover:bg-primary-100 dark:hover:bg-primary-900'
                             }`}
