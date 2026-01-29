@@ -2,8 +2,35 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const { sanitizeString } = require('../utils/sanitize');
+const { containsProfanity, filterProfanity } = require('../utils/profanity');
 
 const router = express.Router();
+
+// GET /api/events/:eventId/public - Get public event info (no auth required)
+router.get('/events/:eventId/public', (req, res) => {
+  try {
+    const event = db.prepare('SELECT id, name, date, start_time, end_time, location, description, status, settings FROM events WHERE id = ?').get(req.params.eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    res.json({
+      id: event.id,
+      name: event.name,
+      date: event.date,
+      startTime: event.start_time,
+      endTime: event.end_time,
+      location: event.location,
+      description: event.description,
+      status: event.status,
+      settings: JSON.parse(event.settings || '{}')
+    });
+  } catch (err) {
+    console.error('Get public event error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 // POST /api/events/:eventId/requests - Submit song request (attendee - no auth required)
 router.post('/events/:eventId/requests', (req, res) => {
@@ -15,16 +42,82 @@ router.post('/events/:eventId/requests', (req, res) => {
       return res.status(400).json({ error: 'Song title, artist name, and requester ID are required' });
     }
 
+    // Sanitize user inputs against XSS
+    const cleanSongTitle = sanitizeString(songTitle);
+    const cleanArtistName = sanitizeString(artistName);
+    const cleanNickname = nickname ? sanitizeString(nickname) : null;
+    const cleanMessage = message ? sanitizeString(message) : null;
+    const cleanRequestedBy = sanitizeString(requestedBy);
+
     // Check event exists
     const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
     }
 
+    // Check request limit per attendee
+    const settings = JSON.parse(event.settings || '{}');
+    if (settings.requestLimit && settings.requestLimit > 0) {
+      const existingCount = db.prepare('SELECT COUNT(*) as count FROM requests WHERE event_id = ? AND requested_by = ?')
+        .get(eventId, requestedBy).count;
+      if (existingCount >= settings.requestLimit) {
+        return res.status(429).json({
+          error: `Request limit reached. Maximum ${settings.requestLimit} requests per attendee.`,
+          limit: settings.requestLimit,
+          current: existingCount
+        });
+      }
+    }
+
+    // Check cooldown period between requests
+    if (settings.cooldownMinutes && settings.cooldownMinutes > 0) {
+      const lastRequest = db.prepare(
+        'SELECT created_at FROM requests WHERE event_id = ? AND requested_by = ? ORDER BY created_at DESC LIMIT 1'
+      ).get(eventId, requestedBy);
+
+      if (lastRequest) {
+        const lastTime = new Date(lastRequest.created_at + 'Z').getTime();
+        const now = Date.now();
+        const cooldownMs = settings.cooldownMinutes * 60 * 1000;
+        const elapsed = now - lastTime;
+
+        if (elapsed < cooldownMs) {
+          const remainingSec = Math.ceil((cooldownMs - elapsed) / 1000);
+          const remainingMin = Math.ceil(remainingSec / 60);
+          return res.status(429).json({
+            error: `Please wait ${remainingMin} minute(s) before submitting another request.`,
+            cooldownMinutes: settings.cooldownMinutes,
+            retryAfterSeconds: remainingSec
+          });
+        }
+      }
+    }
+
+    // Check explicit content blocking
+    if (settings.blockExplicit && explicitFlag) {
+      return res.status(403).json({
+        error: 'Explicit content is not allowed for this event.',
+        blocked: true,
+        reason: 'explicit'
+      });
+    }
+
+    // Profanity filter on messages and nicknames
+    let filteredMessage = cleanMessage;
+    let filteredNickname = cleanNickname;
+    if (settings.filterProfanity) {
+      if (cleanMessage && containsProfanity(cleanMessage)) {
+        filteredMessage = filterProfanity(cleanMessage);
+      }
+      if (cleanNickname && containsProfanity(cleanNickname)) {
+        filteredNickname = filterProfanity(cleanNickname);
+      }
+    }
+
     const id = uuidv4();
     db.prepare(`INSERT INTO requests (id, event_id, song_title, artist_name, album_art_url, duration_ms, explicit_flag, itunes_track_id, requested_by, nickname, message)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(id, eventId, songTitle, artistName, albumArtUrl || null, durationMs || null, explicitFlag ? 1 : 0, itunesTrackId || null, requestedBy, nickname || null, message || null);
+      .run(id, eventId, cleanSongTitle, cleanArtistName, albumArtUrl || null, durationMs || null, explicitFlag ? 1 : 0, itunesTrackId || null, cleanRequestedBy, filteredNickname, filteredMessage);
 
     const request = db.prepare('SELECT * FROM requests WHERE id = ?').get(id);
     res.status(201).json(formatRequest(request));
@@ -42,6 +135,41 @@ router.get('/events/:eventId/requests', (req, res) => {
     res.json(requests.map(formatRequest));
   } catch (err) {
     console.error('List requests error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+// PUT /api/events/:eventId/requests/bulk-reject - Bulk reject requests (DJ only)
+router.put('/events/:eventId/requests/bulk-reject', authenticateToken, (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { requestIds } = req.body;
+
+    if (!Array.isArray(requestIds) || requestIds.length === 0) {
+      return res.status(400).json({ error: 'requestIds array is required' });
+    }
+
+    // Verify event ownership
+    const event = db.prepare('SELECT * FROM events WHERE id = ? AND dj_id = ?').get(eventId, req.user.id);
+    if (!event) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const updateStmt = db.prepare('UPDATE requests SET status = ?, updated_at = datetime(\'now\') WHERE id = ? AND event_id = ?');
+    const updateMany = db.transaction((ids) => {
+      let updated = 0;
+      for (const id of ids) {
+        const result = updateStmt.run('rejected', id, eventId);
+        updated += result.changes;
+      }
+      return updated;
+    });
+
+    const count = updateMany(requestIds);
+    res.json({ message: `${count} requests rejected`, count });
+  } catch (err) {
+    console.error('Bulk reject error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

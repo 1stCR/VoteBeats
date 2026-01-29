@@ -2,6 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const { sanitizeString } = require('../utils/sanitize');
 
 const router = express.Router();
 
@@ -17,12 +18,17 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'Event name is required' });
     }
 
+    // Sanitize user inputs
+    const cleanName = sanitizeString(name);
+    const cleanLocation = location ? sanitizeString(location) : null;
+    const cleanDescription = description ? sanitizeString(description) : null;
+
     const id = uuidv4();
     const settingsJson = JSON.stringify(settings || {});
 
     db.prepare(`INSERT INTO events (id, dj_id, name, date, start_time, end_time, location, description, settings)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(id, req.user.id, name, date || null, startTime || null, endTime || null, location || null, description || null, settingsJson);
+      .run(id, req.user.id, cleanName, date || null, startTime || null, endTime || null, cleanLocation, cleanDescription, settingsJson);
 
     const event = db.prepare('SELECT * FROM events WHERE id = ?').get(id);
     res.status(201).json(formatEvent(event));
@@ -67,6 +73,11 @@ router.put('/:id', (req, res) => {
 
     const { name, date, startTime, endTime, location, description, status, settings } = req.body;
 
+    // Sanitize user inputs
+    const cleanName = name ? sanitizeString(name) : undefined;
+    const cleanLocation = location ? sanitizeString(location) : undefined;
+    const cleanDescription = description ? sanitizeString(description) : undefined;
+
     db.prepare(`UPDATE events SET
       name = COALESCE(?, name),
       date = COALESCE(?, date),
@@ -78,7 +89,7 @@ router.put('/:id', (req, res) => {
       settings = COALESCE(?, settings),
       updated_at = datetime('now')
       WHERE id = ?`)
-      .run(name, date, startTime, endTime, location, description, status, settings ? JSON.stringify(settings) : null, req.params.id);
+      .run(cleanName, date, startTime, endTime, cleanLocation, cleanDescription, status, settings ? JSON.stringify(settings) : null, req.params.id);
 
     const updated = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
     res.json(formatEvent(updated));

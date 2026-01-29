@@ -9,7 +9,10 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import EventCreatePage from './pages/EventCreatePage';
+import EventManagePage from './pages/EventManagePage';
 import NotFoundPage from './pages/NotFoundPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import EventPublicPage from './pages/EventPublicPage';
 
 export default function App() {
   return (
@@ -18,6 +21,7 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route
           path="/dashboard/*"
           element={
@@ -38,7 +42,7 @@ export default function App() {
           path="/events/:id/manage/*"
           element={
             <ProtectedRoute>
-              <DashboardPage />
+              <EventManagePage />
             </ProtectedRoute>
           }
         />
@@ -50,6 +54,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/e/:eventId" element={<EventPublicPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </AuthProvider>

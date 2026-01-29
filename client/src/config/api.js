@@ -46,6 +46,12 @@ export const api = {
   logout: () =>
     apiRequest('/api/auth/logout', { method: 'POST' }),
 
+  forgotPassword: (email) =>
+    apiRequest('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
   getMe: () =>
     apiRequest('/api/auth/me'),
 
@@ -67,6 +73,9 @@ export const api = {
 
   getEvent: (id) =>
     apiRequest(`/api/events/${id}`),
+
+  getPublicEvent: (id) =>
+    apiRequest(`/api/events/${id}/public`),
 
   updateEvent: (id, eventData) =>
     apiRequest(`/api/events/${id}`, {
@@ -96,6 +105,12 @@ export const api = {
   deleteRequest: (eventId, requestId) =>
     apiRequest(`/api/events/${eventId}/requests/${requestId}`, { method: 'DELETE' }),
 
+  bulkRejectRequests: (eventId, requestIds) =>
+    apiRequest(`/api/events/${eventId}/requests/bulk-reject`, {
+      method: 'PUT',
+      body: JSON.stringify({ requestIds }),
+    }),
+
   voteRequest: (eventId, requestId, userId) =>
     apiRequest(`/api/events/${eventId}/requests/${requestId}/vote`, {
       method: 'POST',
@@ -105,6 +120,19 @@ export const api = {
   // Songs
   searchSongs: (query) =>
     apiRequest(`/api/songs/search?q=${encodeURIComponent(query)}`),
+
+  // Messages
+  sendDJMessage: (eventId, content) =>
+    apiRequest(`/api/events/${eventId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    }),
+
+  getEventMessages: (eventId) =>
+    apiRequest(`/api/events/${eventId}/messages`),
+
+  deleteDJMessage: (eventId, messageId) =>
+    apiRequest(`/api/events/${eventId}/messages/${messageId}`, { method: 'DELETE' }),
 
   // Health
   healthCheck: () =>
