@@ -497,8 +497,18 @@ export default function EventPublicPage() {
                     <p className="text-sm text-slate-500">No songs in the queue yet. Be the first to request!</p>
                   ) : (
                     <div className="space-y-2">
-                      {requests.filter(r => r.status === 'queued' || r.status === 'pending').map(req => (
-                        <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                      {requests.filter(r => r.status === 'queued' || r.status === 'pending')
+                        .sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0))
+                        .map((req, index) => (
+                        <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg" data-rank={index + 1}>
+                          <span className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-xs font-bold ${
+                            index === 0 ? 'bg-yellow-400 text-yellow-900' :
+                            index === 1 ? 'bg-slate-300 text-slate-700' :
+                            index === 2 ? 'bg-amber-600 text-white' :
+                            'bg-slate-100 dark:bg-slate-600 text-slate-500 dark:text-slate-300'
+                          }`}>
+                            {index + 1}
+                          </span>
                           {req.song?.albumArtUrl && (
                             <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded" />
                           )}
