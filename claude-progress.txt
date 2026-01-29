@@ -185,3 +185,42 @@ NEXT SESSION:
 - All 51 features are passing (100% complete)
 - No pending features to implement
 - App is in working state with clean code
+
+=== Session: 2026-01-29 (Session 6) ===
+Status: 51/51 features passing (100%)
+
+REGRESSION TESTING:
+- Feature #39 (Landing page shows login/register options): PASSED
+  - Navigated to / while logged out
+  - "DJ Login" and "Sign Up" links visible in header
+  - "Get Started Free" and "DJ Login" CTA buttons visible in hero section
+  - Clicked "DJ Login" -> navigated to /login correctly
+
+- Feature #34 (Event URL /e/{eventId} loads correct event): PASSED
+  - Registered new DJ (regression6@test.com / TestDJ_Regression6)
+  - Created event "TEST_B14_REGRESSION_EVENT" (2026-09-15, Regression Hall B14)
+  - Navigated to /e/{eventId}
+  - Event name "TEST_B14_REGRESSION_EVENT" displayed correctly
+  - Location "Regression Hall B14" displayed correctly
+  - Attendee interface with Request Song, Queue, My Requests tabs loaded
+
+- Feature #50 (Empty state shows when no requests exist): PASSED
+  - Attendee Queue tab: "Live Queue (0)" with "No songs in the queue yet."
+  - DJ Queue Management: "Song Requests (0)" with "No song requests yet."
+
+CONSOLE ERRORS: None (zero errors at error level)
+
+ALL REGRESSION TESTS PASSED. No regressions found.
+
+SUMMARY:
+- All 51 features remain passing (100% complete)
+- No new features to implement
+- No bugs discovered
+- Zero console errors
+- Backend runs on port 3002 (default), frontend on port 3000
+- App is in working state with clean code
+
+NEXT SESSION:
+- All 51 features are passing (100% complete)
+- No pending features to implement
+- App is in working state with clean code
