@@ -42,6 +42,45 @@ export default function EventPublicPage() {
   const [submitSuccess, setSubmitSuccess] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('all');
   const [votingCountdown, setVotingCountdown] = useState(null);
+  const [votingOpenCountdown, setVotingOpenCountdown] = useState(null);
+
+  // Helper to format time diff
+  const formatTimeDiff = (diff) => {
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    if (days > 0) return days + 'd ' + hours + 'h ' + minutes + 'm';
+    if (hours > 0) return hours + 'h ' + minutes + 'm ' + seconds + 's';
+    return minutes + 'm ' + seconds + 's';
+  };
+
+  // Countdown timer for voting open
+  useEffect(() => {
+    const settings = event?.settings;
+    if (!settings) return;
+
+    if (settings.votingSchedule === 'scheduled' && settings.votingOpenTime) {
+      const updateOpenCountdown = () => {
+        const now = Date.now();
+        const openTime = new Date(settings.votingOpenTime).getTime();
+        const diff = openTime - now;
+
+        if (diff <= 0) {
+          setVotingOpenCountdown(null); // Voting has opened
+          return;
+        }
+
+        setVotingOpenCountdown({ notYetOpen: true, text: formatTimeDiff(diff), diff });
+      };
+
+      updateOpenCountdown();
+      const interval = setInterval(updateOpenCountdown, 1000);
+      return () => clearInterval(interval);
+    }
+
+    setVotingOpenCountdown(null);
+  }, [event?.settings?.votingSchedule, event?.settings?.votingOpenTime]);
 
   // Countdown timer for voting close
   useEffect(() => {
@@ -66,22 +105,7 @@ export default function EventPublicPage() {
           return;
         }
 
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-        let text;
-        if (days > 0) {
-          text = days + 'd ' + hours + 'h ' + minutes + 'm';
-        } else if (hours > 0) {
-          text = hours + 'h ' + minutes + 'm ' + seconds + 's';
-        } else {
-          text = minutes + 'm ' + seconds + 's';
-        }
-
-        const urgency = diff <= 3600000 ? 'urgent' : diff <= 86400000 ? 'warning' : 'normal';
-        setVotingCountdown({ closed: false, text, urgency, diff });
+        setVotingCountdown({ closed: false, text: formatTimeDiff(diff), urgency: diff <= 3600000 ? 'urgent' : diff <= 86400000 ? 'warning' : 'normal', diff });
       };
 
       updateCountdown();
@@ -180,6 +204,10 @@ export default function EventPublicPage() {
 
   function handleManualSubmit() {
     if (!manualTitle.trim() || !manualArtist.trim()) return;
+    if (votingOpenCountdown?.notYetOpen) {
+      alert('Voting has not opened yet. Please wait for the voting window to open!');
+      return;
+    }
     if (votingCountdown?.closed) {
       alert('Voting has closed. The final playlist is set!');
       return;
@@ -202,6 +230,10 @@ export default function EventPublicPage() {
   }
 
   async function handleSubmitRequest(song) {
+    if (votingOpenCountdown?.notYetOpen) {
+      alert('Voting has not opened yet. Please wait for the voting window to open!');
+      return;
+    }
     if (votingCountdown?.closed) {
       alert('Voting has closed. The final playlist is set!');
       return;
@@ -318,6 +350,12 @@ export default function EventPublicPage() {
                   </div>
                 )}
 
+          {votingOpenCountdown && (
+            <div id="voting-open-banner" className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium bg-blue-500/20 text-blue-100">
+              <Clock className="w-4 h-4" />
+              {`Voting opens in ${votingOpenCountdown.text}`}
+            </div>
+          )}
           {votingCountdown && (
             <div id="voting-countdown-banner" className={`mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
               votingCountdown.closed
@@ -375,7 +413,17 @@ export default function EventPublicPage() {
         <div className="bg-white dark:bg-slate-800 rounded-b-xl shadow-sm border border-t-0 border-slate-200 dark:border-slate-700 p-4 mb-8">
           {activeTab === 'request' && (
             <div>
-              {votingCountdown?.closed ? (
+              {votingOpenCountdown?.notYetOpen ? (
+                <div className="text-center py-12">
+                  <Clock className="w-16 h-16 text-blue-300 dark:text-blue-600 mx-auto mb-4" />
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Voting hasn't opened yet</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">The voting window will open soon.</p>
+                  <div className="inline-block px-6 py-3 bg-gradient-to-r from-blue-500 to-primary-500 rounded-full">
+                    <p className="text-lg font-bold text-white">Opens in {votingOpenCountdown.text}</p>
+                  </div>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-4">Come back when voting opens to request and vote on songs!</p>
+                </div>
+              ) : votingCountdown?.closed ? (
                 <div className="text-center py-12">
                   <ListMusic className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
                   <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Voting has closed</h2>
@@ -606,7 +654,7 @@ export default function EventPublicPage() {
                           </div>
                           <button
                             onClick={() => handleVote(req.id)}
-                            disabled={votingCountdown?.closed}
+                            disabled={votingCountdown?.closed || votingOpenCountdown?.notYetOpen}
                             className={`flex items-center gap-1 px-2 py-1 text-xs rounded-full transition-colors ${
                               votingCountdown?.closed
                                 ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
@@ -713,9 +761,9 @@ export default function EventPublicPage() {
                           </div>
                           <button
                             onClick={() => handleVote(req.id)}
-                            disabled={votingCountdown?.closed}
+                            disabled={votingCountdown?.closed || votingOpenCountdown?.notYetOpen}
                             className={`flex items-center gap-1 px-2 py-1 text-xs rounded-full transition-colors ${
-                              votingCountdown?.closed
+                              (votingCountdown?.closed || votingOpenCountdown?.notYetOpen)
                                 ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
                                 : req.votedByUser
                                 ? 'bg-primary-500 text-white'
