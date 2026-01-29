@@ -1,26 +1,28 @@
 ===== VoteBeats Development Progress =====
 
-=== Session: 2026-01-29 (Session 17) ===
+=== Session: 2026-01-29 (Session 18) ===
 Status: 51/51 features passing (100%)
 
 REGRESSION TESTING:
-- Feature #1 (Unauthenticated user redirected from DJ dashboard): PASSED
-  - Cleared localStorage/sessionStorage, navigated to /dashboard
-  - Redirected to /login, no dashboard content visible
+- Feature #5 (Unauthenticated API requests return 401): PASSED
+  - POST /api/events without auth -> 401
+  - GET /api/events without auth -> 401
+  - PUT /api/events/:id without auth -> 401
+  - All return proper error message: "Authentication required"
 
-- Feature #8 (Logout clears session and redirects to login): PASSED
-  - Registered new DJ (regtest_s17@test.com / TestPass17A)
-  - Logged in, verified dashboard accessible with "Welcome, DJ Regtest S17"
-  - Clicked Logout, redirected to /login
-  - Attempted /dashboard again, redirected to /login (session fully cleared)
+- Feature #39 (Landing page shows login/register options): PASSED
+  - Navigated to / (logged out)
+  - "DJ Login" link visible in header, navigates to /login
+  - "Sign Up" link visible in header, navigates to /register
+  - "Get Started Free" CTA also links to /register
+  - Login page shows email/password form with Sign In button
 
-- Feature #37 (Modal close returns to previous state): PASSED
-  - Created event REGTEST_S17_EVENT (2026-06-15, Test Venue S17)
-  - Submitted Bohemian Rhapsody by Queen as attendee song request
-  - Navigated to DJ queue management, song visible in Pending section
-  - Selected song (checkbox), bulk action "Reject Selected (1)" appeared
-  - Deselected song, bulk action disappeared, queue list state unchanged
-  - Song still shows with correct data (title, artist, 0 votes, Approve/Reject buttons)
+- Feature #9 (Password reset flow works securely): PASSED
+  - Navigated to /login, clicked "Forgot password?" -> /forgot-password
+  - Entered registered email (regtest_s17@test.com), submitted
+  - Success message: "If an account with that email exists, a password reset link has been sent."
+  - Entered non-existent email (nonexistent_user_xyz@fake.com), submitted
+  - Same generic message shown -- no information leakage about email existence
 
 CONSOLE ERRORS: Zero JavaScript errors detected.
 NOTE: Backend server had crashed between sessions. Restarted successfully on port 3002.
@@ -41,9 +43,16 @@ NEXT SESSION:
 - No pending features to implement
 - App is in working state with clean code
 
+=== Session: 2026-01-29 (Session 17) ===
+Status: 51/51 features passing (100%)
+REGRESSION TESTING:
+- Feature #1 (Unauthenticated user redirected from DJ dashboard): PASSED
+- Feature #8 (Logout clears session and redirects to login): PASSED
+- Feature #37 (Modal close returns to previous state): PASSED
+ALL REGRESSION TESTS PASSED. No regressions found.
+
 === Session: 2026-01-29 (Session 16) ===
 Status: 51/51 features passing (100%)
-
 REGRESSION TESTING:
 - Feature #6 (Attendee cannot access DJ-only API endpoints): PASSED
 - Feature #7 (DJ cannot access another DJs events): PASSED
@@ -58,14 +67,6 @@ REGRESSION TESTING:
 - Feature #48 (Vote count reflects real votes): PASSED
 ALL REGRESSION TESTS PASSED. No regressions found.
 
-=== Session: 2026-01-29 (Session 14) ===
-Status: 51/51 features passing (100%)
-REGRESSION TESTING:
-- Feature #10 (Failed login shows generic error - no info leakage): PASSED
-- Feature #16 (Security rules block unauthorized access): PASSED
-- Feature #30 (Back button works after navigation): PASSED
-ALL REGRESSION TESTS PASSED. No regressions found.
-
-=== Previous Sessions (2026-01-29, Sessions 1-13) ===
+=== Previous Sessions (2026-01-29, Sessions 1-14) ===
 All sessions completed with 51/51 features passing (100%).
 Regression tests passed in every session. No regressions found across all sessions.
