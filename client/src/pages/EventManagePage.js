@@ -519,6 +519,88 @@ export default function EventManagePage() {
             </div>
           )}
 
+          {/* Action Required Banner */}
+          {(() => {
+            const actionItems = [];
+
+            // Critical: Pending requests need review (red)
+            if (pendingRequests.length > 0) {
+              actionItems.push({
+                urgency: 'critical',
+                icon: Inbox,
+                message: pendingRequests.length === 1
+                  ? '1 song request awaiting approval'
+                  : pendingRequests.length + ' song requests awaiting approval',
+                action: 'Review',
+                onAction: () => navigate('/events/' + id + '/manage/pending'),
+              });
+            }
+
+            // Warning: Queue is empty but event is active (amber)
+            if (event?.status === 'active' && queuedRequests.length === 0 && !nowPlayingRequest) {
+              actionItems.push({
+                urgency: 'warning',
+                icon: AlertTriangle,
+                message: 'Queue is empty \u2014 no songs queued or playing',
+                action: 'View Queue',
+                onAction: () => navigate('/events/' + id + '/manage/queue'),
+              });
+            }
+
+            // Warning: Nothing currently playing during active event (amber)
+            if (event?.status === 'active' && !nowPlayingRequest && queuedRequests.length > 0) {
+              actionItems.push({
+                urgency: 'warning',
+                icon: Play,
+                message: queuedRequests.length + ' song' + (queuedRequests.length !== 1 ? 's' : '') + ' queued but nothing playing',
+                action: 'View Queue',
+                onAction: () => navigate('/events/' + id + '/manage/queue'),
+              });
+            }
+
+            // Sort by urgency: critical first, then warning
+            actionItems.sort((a, b) => {
+              const order = { critical: 0, warning: 1 };
+              const va = order[a.urgency] !== undefined ? order[a.urgency] : 2;
+              const vb = order[b.urgency] !== undefined ? order[b.urgency] : 2;
+              return va - vb;
+            });
+
+            if (actionItems.length === 0) return null;
+
+            return (
+              <div className="mb-6 space-y-2" data-action-required>
+                {actionItems.map((item, idx) => {
+                  const ItemIcon = item.icon;
+                  const isCritical = item.urgency === 'critical';
+                  return (
+                    <div
+                      key={idx}
+                      className={'flex items-center gap-3 p-3 rounded-lg border text-sm ' +
+                        (isCritical
+                          ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+                          : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300')
+                      }
+                    >
+                      <ItemIcon className={'w-5 h-5 flex-shrink-0 ' + (isCritical ? 'text-red-500 dark:text-red-400' : 'text-amber-500 dark:text-amber-400')} />
+                      <span className="flex-1 font-medium">{item.message}</span>
+                      <button
+                        onClick={item.onAction}
+                        className={'px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex-shrink-0 ' +
+                          (isCritical
+                            ? 'bg-red-600 hover:bg-red-700 text-white'
+                            : 'bg-amber-500 hover:bg-amber-600 text-white')
+                        }
+                      >
+                        {item.action}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
           {activeView === 'queue' && (
             <>
               {/* Event Info Header */}
