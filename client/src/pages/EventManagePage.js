@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
 import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users, StickyNote, Save, ArrowUpDown, Search, Keyboard } from 'lucide-react';
@@ -39,6 +39,8 @@ export default function EventManagePage() {
   const [showShortcuts, setShowShortcuts] = useState(false); // keyboard shortcuts help
   const [songEndingAlert, setSongEndingAlert] = useState(null); // { songId, nextSong, remainingSeconds }
   const [dismissedAlerts, setDismissedAlerts] = useState(new Set()); // set of songIds already dismissed
+  const [requestToasts, setRequestToasts] = useState([]); // toast notifications for new requests
+  const knownRequestIds = useRef(null); // tracks known request IDs to detect new ones
 
   // Helper to format duration from milliseconds to mm:ss
   const formatDuration = (ms) => {
@@ -99,6 +101,59 @@ export default function EventManagePage() {
     }
     loadAllEvents();
   }, []);
+
+  // New request notification: detect new pending requests and show toast (approval mode)
+  const pageLoadTime = useRef(Date.now());
+  useEffect(() => {
+    const currentIds = new Set(requests.map(r => r.id));
+
+    // On first load (null ref), seed the known IDs without showing toasts
+    if (knownRequestIds.current === null) {
+      knownRequestIds.current = currentIds;
+      return;
+    }
+
+    // Don't show toasts within first 10 seconds of page load (let initial data settle)
+    if (Date.now() - pageLoadTime.current < 10000) {
+      knownRequestIds.current = currentIds;
+      return;
+    }
+
+    // Only show notifications when require approval is enabled
+    const approvalMode = event?.settings?.requireApproval;
+    if (!approvalMode) {
+      knownRequestIds.current = currentIds;
+      return;
+    }
+
+    // Detect new request IDs that are pending
+    const newPendingRequests = requests.filter(
+      r => r.status === 'pending' && !knownRequestIds.current.has(r.id)
+    );
+
+    if (newPendingRequests.length > 0) {
+      const newToasts = newPendingRequests.map(r => ({
+        id: r.id,
+        songTitle: r.song?.title || 'Unknown Song',
+        artistName: r.song?.artist || 'Unknown Artist',
+        albumArtUrl: r.song?.albumArtUrl || null,
+        nickname: r.requestedBy?.nickname || null,
+        timestamp: Date.now(),
+      }));
+      setRequestToasts(prev => [...prev, ...newToasts]);
+    }
+
+    knownRequestIds.current = currentIds;
+  }, [requests, event]);
+
+  // Auto-dismiss request toasts after 15 seconds
+  useEffect(() => {
+    if (requestToasts.length === 0) return;
+    const timer = setTimeout(() => {
+      setRequestToasts(prev => prev.slice(1));
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, [requestToasts]);
 
   // Song ending alert: monitor now-playing song and alert 30s before it ends
   useEffect(() => {
@@ -1685,6 +1740,59 @@ export default function EventManagePage() {
               <p className="text-sm text-slate-500 dark:text-slate-400">No songs queued up next</p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* New Request Toast Notifications */}
+      {requestToasts.length > 0 && (
+        <div className="fixed top-4 right-4 z-50 space-y-2" data-request-toasts>
+          {requestToasts.map((toast) => (
+            <div
+              key={toast.id}
+              className="w-80 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-primary-200 dark:border-primary-800 overflow-hidden cursor-pointer hover:shadow-xl transition-shadow animate-slide-in"
+              onClick={() => {
+                navigate('/events/' + id + '/manage/pending');
+                setRequestToasts(prev => prev.filter(t => t.id !== toast.id));
+              }}
+              data-request-toast
+            >
+              <div className="bg-primary-500 px-4 py-2 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-white">
+                  <Inbox className="w-4 h-4" />
+                  <span className="text-sm font-bold">New Request</span>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRequestToasts(prev => prev.filter(t => t.id !== toast.id));
+                  }}
+                  className="text-white/80 hover:text-white transition-colors"
+                  data-dismiss-request-toast
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-4 flex items-center gap-3">
+                {toast.albumArtUrl ? (
+                  <img src={toast.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                ) : (
+                  <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                    <Music className="w-5 h-5 text-slate-400" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{toast.songTitle}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{toast.artistName}</p>
+                  {toast.nickname && (
+                    <p className="text-xs text-primary-500 dark:text-primary-400 truncate mt-0.5">Requested by {toast.nickname}</p>
+                  )}
+                </div>
+              </div>
+              <div className="px-4 pb-3">
+                <p className="text-xs text-slate-400 dark:text-slate-500">Click to review pending requests</p>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
