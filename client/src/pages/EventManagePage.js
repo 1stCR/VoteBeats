@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
-import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users, StickyNote, Save, ArrowUpDown } from 'lucide-react';
+import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users, StickyNote, Save, ArrowUpDown, Search } from 'lucide-react';
 import { api } from '../config/api';
 import { useTheme } from '../contexts/ThemeContext';
 import EventSettingsForm from '../components/EventSettingsForm';
@@ -33,6 +33,7 @@ export default function EventManagePage() {
   const [noteTexts, setNoteTexts] = useState({}); // { requestId: text }
   const [queueFilter, setQueueFilter] = useState('all'); // all, pending, queued, nowPlaying, played, rejected
   const [queueSort, setQueueSort] = useState('votes'); // votes, time, title, artist
+  const [queueSearch, setQueueSearch] = useState(''); // search within queue
 
   // Helper to format duration from milliseconds to mm:ss
   const formatDuration = (ms) => {
@@ -238,7 +239,8 @@ export default function EventManagePage() {
   }
 
   function sortRequests(reqs) {
-    return [...reqs].sort((a, b) => {
+    const filtered = filterBySearch(reqs);
+    return [...filtered].sort((a, b) => {
       switch (queueSort) {
         case 'votes':
           return (b.voteCount || 0) - (a.voteCount || 0);
@@ -252,6 +254,16 @@ export default function EventManagePage() {
           return 0;
       }
     });
+  }
+
+  function filterBySearch(reqs) {
+    if (!queueSearch.trim()) return reqs;
+    const q = queueSearch.toLowerCase().trim();
+    return reqs.filter(r =>
+      (r.song?.title || '').toLowerCase().includes(q) ||
+      (r.song?.artist || '').toLowerCase().includes(q) ||
+      (r.requestedBy?.nickname || '').toLowerCase().includes(q)
+    );
   }
 
   function getStatusBadge(s) {
@@ -618,6 +630,24 @@ export default function EventManagePage() {
                         </button>
                       ))}
                     </div>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search by song, artist, or requester..."
+                        value={queueSearch}
+                        onChange={(e) => setQueueSearch(e.target.value)}
+                        className="w-full pl-9 pr-8 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      />
+                      {queueSearch && (
+                        <button
+                          onClick={() => setQueueSearch('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -781,7 +811,7 @@ export default function EventManagePage() {
                     )}
 
                     {/* Now Playing */}
-                    {nowPlayingRequest && (queueFilter === 'all' || queueFilter === 'nowPlaying') && (
+                    {nowPlayingRequest && (queueFilter === 'all' || queueFilter === 'nowPlaying') && filterBySearch([nowPlayingRequest]).length > 0 && (
                       <div className="mb-4">
                         <h4 className="text-sm font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide mb-3 flex items-center gap-2">
                           <Radio className="w-4 h-4 animate-pulse" />
