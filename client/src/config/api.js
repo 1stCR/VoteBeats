@@ -159,6 +159,12 @@ export const api = {
   deleteRequest: (eventId, requestId) =>
     apiRequest(`/api/events/${eventId}/requests/${requestId}`, { method: 'DELETE' }),
 
+  bulkApproveRequests: (eventId, requestIds) =>
+    apiRequest(`/api/events/${eventId}/requests/bulk-approve`, {
+      method: 'PUT',
+      body: JSON.stringify({ requestIds }),
+    }),
+
   bulkRejectRequests: (eventId, requestIds) =>
     apiRequest(`/api/events/${eventId}/requests/bulk-reject`, {
       method: 'PUT',

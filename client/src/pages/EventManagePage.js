@@ -31,6 +31,8 @@ export default function EventManagePage() {
   const [voterData, setVoterData] = useState({});
   const [editingNotes, setEditingNotes] = useState(null); // requestId being edited
   const [noteTexts, setNoteTexts] = useState({}); // { requestId: text }
+  const [batchMode, setBatchMode] = useState(false); // batch selection mode
+  const [approving, setApproving] = useState(false);
   const [queueFilter, setQueueFilter] = useState('all'); // all, pending, queued, nowPlaying, played, rejected
   const [queueSort, setQueueSort] = useState('votes'); // votes, time, title, artist
   const [queueSearch, setQueueSearch] = useState(''); // search within queue
@@ -175,6 +177,20 @@ export default function EventManagePage() {
       setError(err.message || 'Failed to reject requests');
     } finally {
       setRejecting(false);
+    }
+  }
+
+  async function handleBulkApprove() {
+    setApproving(true);
+    try {
+      await api.bulkApproveRequests(id, Array.from(selectedRequests));
+      setSelectedRequests(new Set());
+      setBatchMode(false);
+      await loadRequests();
+    } catch (err) {
+      setError(err.message || 'Failed to approve requests');
+    } finally {
+      setApproving(false);
     }
   }
 
@@ -572,15 +588,45 @@ export default function EventManagePage() {
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white">
                     Song Requests ({requests.length})
                   </h3>
-                  {selectedRequests.size > 0 && (
-                    <button
-                      onClick={() => setShowBulkRejectDialog(true)}
-                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
-                    >
-                      <XCircle className="w-4 h-4" />
-                      Reject Selected ({selectedRequests.size})
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {pendingRequests.length > 0 && (
+                      <button
+                        onClick={() => { setBatchMode(!batchMode); setSelectedRequests(new Set()); }}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                          batchMode
+                            ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-300 dark:border-primary-700'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                        }`}
+                        data-batch-toggle
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <CheckSquare className="w-3.5 h-3.5" />
+                          {batchMode ? 'Exit Batch' : 'Batch Select'}
+                        </span>
+                      </button>
+                    )}
+                    {selectedRequests.size > 0 && (
+                      <>
+                        <button
+                          onClick={handleBulkApprove}
+                          disabled={approving}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
+                          data-bulk-approve
+                        >
+                          <Check className="w-4 h-4" />
+                          {approving ? 'Approving...' : `Approve (${selectedRequests.size})`}
+                        </button>
+                        <button
+                          onClick={() => setShowBulkRejectDialog(true)}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                          data-bulk-reject
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Reject ({selectedRequests.size})
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Queue time timeline bar */}
@@ -1116,15 +1162,42 @@ export default function EventManagePage() {
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white">
                   Pending Requests ({pendingRequests.length})
                 </h3>
-                {selectedRequests.size > 0 && (
-                  <button
-                    onClick={() => setShowBulkRejectDialog(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    Reject Selected ({selectedRequests.size})
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {pendingRequests.length > 0 && (
+                    <button
+                      onClick={() => { setBatchMode(!batchMode); setSelectedRequests(new Set()); }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                        batchMode
+                          ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-300 dark:border-primary-700'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <CheckSquare className="w-3.5 h-3.5" />
+                        {batchMode ? 'Exit Batch' : 'Batch Select'}
+                      </span>
+                    </button>
+                  )}
+                  {selectedRequests.size > 0 && (
+                    <>
+                      <button
+                        onClick={handleBulkApprove}
+                        disabled={approving}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
+                      >
+                        <Check className="w-4 h-4" />
+                        {approving ? 'Approving...' : `Approve (${selectedRequests.size})`}
+                      </button>
+                      <button
+                        onClick={() => setShowBulkRejectDialog(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        Reject ({selectedRequests.size})
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
               {pendingRequests.length === 0 ? (

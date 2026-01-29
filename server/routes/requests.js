@@ -269,6 +269,40 @@ router.get('/events/:eventId/requests', (req, res) => {
 });
 
 
+// PUT /api/events/:eventId/requests/bulk-approve - Bulk approve requests (DJ only)
+router.put('/events/:eventId/requests/bulk-approve', authenticateToken, (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { requestIds } = req.body;
+
+    if (!Array.isArray(requestIds) || requestIds.length === 0) {
+      return res.status(400).json({ error: 'requestIds array is required' });
+    }
+
+    // Verify event ownership
+    const event = db.prepare('SELECT * FROM events WHERE id = ? AND dj_id = ?').get(eventId, req.user.id);
+    if (!event) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const updateStmt = db.prepare('UPDATE requests SET status = ?, updated_at = datetime(\'now\') WHERE id = ? AND event_id = ?');
+    const updateMany = db.transaction((ids) => {
+      let updated = 0;
+      for (const id of ids) {
+        const result = updateStmt.run('queued', id, eventId);
+        updated += result.changes;
+      }
+      return updated;
+    });
+
+    const count = updateMany(requestIds);
+    res.json({ message: `${count} requests approved`, count });
+  } catch (err) {
+    console.error('Bulk approve error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // PUT /api/events/:eventId/requests/bulk-reject - Bulk reject requests (DJ only)
 router.put('/events/:eventId/requests/bulk-reject', authenticateToken, (req, res) => {
   try {
