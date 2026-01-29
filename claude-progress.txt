@@ -37,3 +37,35 @@ NEXT SESSION:
 - All 51 features are passing (100% complete)
 - No pending features to implement
 - App is in working state with clean code
+
+=== Session: 2026-01-29 (Session 2) ===
+Status: 51/51 features passing (100%)
+
+REGRESSION TESTING:
+- Feature #1 (Unauthenticated user redirected from DJ dashboard): PASSED
+  - Navigated to /dashboard without login
+  - Correctly redirected to /login page
+  - No dashboard content was briefly visible
+
+- Feature #31 (Event card links to correct event management): PASSED
+  - Registered new DJ account (testdj2@example.com)
+  - Created event "REGRESSION_EVENT_ALPHA" (2026-03-15, Main Hall)
+  - Created event "REGRESSION_EVENT_BETA" (2026-04-20, Gym Room)
+  - Dashboard showed 2 events with correct details
+  - Clicked BETA - correct management page with BETA name/date/location
+  - Navigated back - clicked ALPHA - correct management page with ALPHA name/date/location
+
+- Feature #30 (Back button works after navigation): PASSED
+  - From ALPHA event management page, clicked browser back
+  - Returned to dashboard correctly
+  - URL updated to /dashboard, dashboard content loaded
+
+CONSOLE ERRORS: Only expected 401 from intentional failed login test (not a bug)
+
+ALL REGRESSION TESTS PASSED. No regressions found.
+
+SUMMARY:
+- All 51 features remain passing (100% complete)
+- No new features to implement
+- No bugs discovered
+- App is in working state with clean code
