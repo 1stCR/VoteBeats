@@ -379,7 +379,11 @@ export default function EventPublicPage() {
                 <div className="text-center py-12">
                   <ListMusic className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
                   <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Voting has closed</h2>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">The final playlist is set!</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">The final playlist is set!</p>
+                  <div className="inline-block px-6 py-3 bg-gradient-to-r from-primary-500 to-purple-500 rounded-full">
+                    <p className="text-lg font-bold text-white">See you at the dance!</p>
+                  </div>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-4">Check the Queue tab to see your contributions highlighted</p>
                 </div>
               ) : (
                 <>
