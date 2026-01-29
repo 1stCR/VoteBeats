@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
-import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users, StickyNote, Save } from 'lucide-react';
+import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users, StickyNote, Save, ArrowUpDown } from 'lucide-react';
 import { api } from '../config/api';
 import { useTheme } from '../contexts/ThemeContext';
 import EventSettingsForm from '../components/EventSettingsForm';
@@ -32,6 +32,7 @@ export default function EventManagePage() {
   const [editingNotes, setEditingNotes] = useState(null); // requestId being edited
   const [noteTexts, setNoteTexts] = useState({}); // { requestId: text }
   const [queueFilter, setQueueFilter] = useState('all'); // all, pending, queued, nowPlaying, played, rejected
+  const [queueSort, setQueueSort] = useState('votes'); // votes, time, title, artist
 
   // Helper to format duration from milliseconds to mm:ss
   const formatDuration = (ms) => {
@@ -234,6 +235,23 @@ export default function EventManagePage() {
     if (!song) return null;
     const query = `${song.title || ''} ${song.artist || ''}`.trim();
     return `https://open.spotify.com/search/${encodeURIComponent(query)}`;
+  }
+
+  function sortRequests(reqs) {
+    return [...reqs].sort((a, b) => {
+      switch (queueSort) {
+        case 'votes':
+          return (b.voteCount || 0) - (a.voteCount || 0);
+        case 'time':
+          return new Date(a.createdAt) - new Date(b.createdAt);
+        case 'title':
+          return (a.song?.title || '').localeCompare(b.song?.title || '');
+        case 'artist':
+          return (a.song?.artist || '').localeCompare(b.song?.artist || '');
+        default:
+          return 0;
+      }
+    });
   }
 
   function getStatusBadge(s) {
@@ -553,29 +571,53 @@ export default function EventManagePage() {
                   )}
                 </div>
 
-                {/* Status filter bar */}
+                {/* Status filter bar and sort */}
                 {requests.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {[
-                      { key: 'all', label: 'All', count: requests.length },
-                      { key: 'pending', label: 'Pending', count: pendingRequests.length },
-                      { key: 'queued', label: 'Queued', count: queuedRequests.length },
-                      { key: 'nowPlaying', label: 'Now Playing', count: nowPlayingRequest ? 1 : 0 },
-                      { key: 'played', label: 'Played', count: playedRequests.length },
-                      { key: 'rejected', label: 'Rejected', count: rejectedRequests.length },
-                    ].map(f => (
-                      <button
-                        key={f.key}
-                        onClick={() => setQueueFilter(f.key)}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                          queueFilter === f.key
-                            ? 'bg-primary-500 text-white'
-                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                        }`}
-                      >
-                        {f.label} ({f.count})
-                      </button>
-                    ))}
+                  <div className="space-y-2 mb-4">
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { key: 'all', label: 'All', count: requests.length },
+                        { key: 'pending', label: 'Pending', count: pendingRequests.length },
+                        { key: 'queued', label: 'Queued', count: queuedRequests.length },
+                        { key: 'nowPlaying', label: 'Now Playing', count: nowPlayingRequest ? 1 : 0 },
+                        { key: 'played', label: 'Played', count: playedRequests.length },
+                        { key: 'rejected', label: 'Rejected', count: rejectedRequests.length },
+                      ].map(f => (
+                        <button
+                          key={f.key}
+                          onClick={() => setQueueFilter(f.key)}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                            queueFilter === f.key
+                              ? 'bg-primary-500 text-white'
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                          }`}
+                        >
+                          {f.label} ({f.count})
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Sort:</span>
+                      {[
+                        { key: 'votes', label: 'Votes' },
+                        { key: 'time', label: 'Time' },
+                        { key: 'title', label: 'Title' },
+                        { key: 'artist', label: 'Artist' },
+                      ].map(s => (
+                        <button
+                          key={s.key}
+                          onClick={() => setQueueSort(s.key)}
+                          className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                            queueSort === s.key
+                              ? 'bg-slate-700 text-white dark:bg-slate-200 dark:text-slate-800'
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -599,7 +641,7 @@ export default function EventManagePage() {
                           </h4>
                         </div>
                         <div className="space-y-2">
-                          {pendingRequests.map(request => (
+                          {sortRequests(pendingRequests).map(request => (
                             <div key={request.id}>
                               <div
                                 className={'flex items-center gap-3 p-3 rounded-lg border transition-colors ' +
@@ -797,7 +839,7 @@ export default function EventManagePage() {
                           Up Next ({queuedRequests.length})
                         </h4>
                         <div className="space-y-2">
-                          {queuedRequests.map(request => (
+                          {sortRequests(queuedRequests).map(request => (
                             <div key={request.id}>
                               <div className="flex items-center gap-3 p-3 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600">
                                 {request.song?.albumArtUrl ? (
@@ -909,7 +951,7 @@ export default function EventManagePage() {
                           Processed ({queueFilter === 'played' ? playedRequests.length : queueFilter === 'rejected' ? rejectedRequests.length : otherRequests.length})
                         </h4>
                         <div className="space-y-2">
-                          {(queueFilter === 'played' ? playedRequests : queueFilter === 'rejected' ? rejectedRequests : otherRequests).map(request => (
+                          {sortRequests(queueFilter === 'played' ? playedRequests : queueFilter === 'rejected' ? rejectedRequests : otherRequests).map(request => (
                             <div
                               key={request.id}
                               className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 opacity-60"
@@ -998,7 +1040,7 @@ export default function EventManagePage() {
                     </button>
                     <span className="text-sm text-slate-500 dark:text-slate-400">Select All</span>
                   </div>
-                  {pendingRequests.map(request => (
+                  {sortRequests(pendingRequests).map(request => (
                     <div key={request.id}>
                       <div
                         className={'flex items-center gap-3 p-3 rounded-lg border transition-colors ' +
