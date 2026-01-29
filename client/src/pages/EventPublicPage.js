@@ -649,7 +649,13 @@ export default function EventPublicPage() {
                       {requests.filter(r => (r.status === 'queued' || r.status === 'pending') && (selectedGenre === 'all' || r.song?.genre === selectedGenre))
                         .sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0))
                         .map((req, index) => (
-                        <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg" data-rank={index + 1}>
+                        <div key={req.id} className={`flex items-center gap-3 p-3 rounded-lg ${
+                          votingCountdown?.closed && req.requestedBy?.userId === attendeeId
+                            ? 'bg-emerald-50 dark:bg-emerald-900/20 ring-2 ring-emerald-300 dark:ring-emerald-700'
+                            : votingCountdown?.closed && req.votedByUser
+                            ? 'bg-primary-50 dark:bg-primary-900/20 ring-2 ring-primary-300 dark:ring-primary-700'
+                            : 'bg-slate-50 dark:bg-slate-700/50'
+                        }`} data-rank={index + 1}>
                           <span className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-xs font-bold ${
                             index === 0 ? 'bg-yellow-400 text-yellow-900' :
                             index === 1 ? 'bg-slate-300 text-slate-700' :
@@ -664,6 +670,16 @@ export default function EventPublicPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
                               <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{req.song?.title}</p>
+                              {votingCountdown?.closed && req.requestedBy?.userId === attendeeId && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-xs font-medium rounded-full flex-shrink-0">
+                                  Your request
+                                </span>
+                              )}
+                              {votingCountdown?.closed && req.votedByUser && req.requestedBy?.userId !== attendeeId && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 text-xs font-medium rounded-full flex-shrink-0">
+                                  You voted
+                                </span>
+                              )}
                               {req.trending && (
                                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-xs font-medium rounded-full flex-shrink-0" title={`+${req.recentVotes} votes in last hour`}>
                                   <Flame className="w-3 h-3" />
