@@ -180,6 +180,15 @@ export default function EventPublicPage() {
   const myRequests = requests.filter(r => r.requestedBy?.userId === attendeeId);
   const myVotes = requests.filter(r => r.votedByUser && r.requestedBy?.userId !== attendeeId);
 
+  // Compute overall rankings for queue position display
+  const rankedQueue = requests
+    .filter(r => r.status === 'queued' || r.status === 'pending')
+    .sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0));
+  const getRank = (reqId) => {
+    const idx = rankedQueue.findIndex(r => r.id === reqId);
+    return idx >= 0 ? idx + 1 : null;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
@@ -572,7 +581,9 @@ export default function EventPublicPage() {
                 <p className="text-sm text-slate-500">You haven't requested any songs yet.</p>
               ) : (
                 <div className="space-y-2">
-                  {myRequests.map(req => (
+                  {myRequests.map(req => {
+                    const rank = getRank(req.id);
+                    return (
                     <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                       {req.song?.albumArtUrl && (
                         <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded" />
@@ -580,6 +591,12 @@ export default function EventPublicPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{req.song?.title}</p>
                         <p className="text-xs text-slate-500 truncate">{req.song?.artist}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-primary-500 dark:text-primary-400 font-medium">{req.voteCount || 0} {(req.voteCount || 0) === 1 ? 'vote' : 'votes'}</span>
+                          {rank && (
+                            <span className="text-xs text-slate-400 dark:text-slate-500">• Rank #{rank} of {rankedQueue.length}</span>
+                          )}
+                        </div>
                       </div>
                       <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
                         req.status === 'pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
@@ -595,7 +612,8 @@ export default function EventPublicPage() {
                         {req.status === 'nowPlaying' && 'Now Playing'}
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
