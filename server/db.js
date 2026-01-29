@@ -86,4 +86,24 @@ db.exec(`
   );
 `);
 
+
+// Migrations - add columns if they don't exist
+try { db.exec('ALTER TABLE users ADD COLUMN totp_secret TEXT'); } catch(e) { /* column exists */ }
+try { db.exec('ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0'); } catch(e) { /* column exists */ }
+try { db.exec("ALTER TABLE users ADD COLUMN notification_preferences TEXT DEFAULT '{}'"); } catch(e) { /* column exists */ }
+try { db.exec("ALTER TABLE users ADD COLUMN default_event_settings TEXT DEFAULT '{}'"); } catch(e) { /* column exists */ }
+
+// Create settings_templates table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS settings_templates (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    settings TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+`);
+
 module.exports = db;

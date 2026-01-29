@@ -69,6 +69,29 @@ router.post('/events/:eventId/requests', (req, res) => {
       }
     }
 
+    // Check post-close request limit (when event is completed)
+    if (event.status === 'completed') {
+      const postCloseLimit = settings.postCloseRequestLimit;
+      if (postCloseLimit !== undefined && postCloseLimit !== null) {
+        if (postCloseLimit === 0) {
+          return res.status(403).json({
+            error: 'Requests are closed for this event.',
+            reason: 'event_closed'
+          });
+        }
+        // Count requests made after event was completed (or just use total if we can't track)
+        const existingCount = db.prepare('SELECT COUNT(*) as count FROM requests WHERE event_id = ? AND requested_by = ?')
+          .get(eventId, requestedBy).count;
+        if (existingCount >= postCloseLimit) {
+          return res.status(429).json({
+            error: `Post-close request limit reached. Maximum ${postCloseLimit} requests after event close.`,
+            limit: postCloseLimit,
+            current: existingCount
+          });
+        }
+      }
+    }
+
     // Check cooldown period between requests
     if (settings.cooldownMinutes && settings.cooldownMinutes > 0) {
       const lastRequest = db.prepare(
@@ -102,10 +125,47 @@ router.post('/events/:eventId/requests', (req, res) => {
       });
     }
 
+    // Check if requests are auto-closed by time
+    if (settings.requestCloseTime) {
+      const closeTime = new Date(settings.requestCloseTime).getTime();
+      if (Date.now() >= closeTime) {
+        return res.status(403).json({
+          error: 'Song requests have closed for this event.',
+          reason: 'requests_closed',
+          closedAt: settings.requestCloseTime
+        });
+      }
+    }
+
+    // Check for duplicate song request by same attendee
+    if (itunesTrackId) {
+      const existingByTrack = db.prepare(
+        'SELECT id FROM requests WHERE event_id = ? AND requested_by = ? AND itunes_track_id = ? AND status != ?'
+      ).get(eventId, requestedBy, itunesTrackId, 'rejected');
+      if (existingByTrack) {
+        return res.status(409).json({
+          error: 'You have already requested this song. Try voting for it instead!',
+          reason: 'duplicate_request',
+          existingRequestId: existingByTrack.id
+        });
+      }
+    } else {
+      const existingByName = db.prepare(
+        'SELECT id FROM requests WHERE event_id = ? AND requested_by = ? AND song_title = ? AND artist_name = ? AND status != ?'
+      ).get(eventId, requestedBy, cleanSongTitle, cleanArtistName, 'rejected');
+      if (existingByName) {
+        return res.status(409).json({
+          error: 'You have already requested this song. Try voting for it instead!',
+          reason: 'duplicate_request',
+          existingRequestId: existingByName.id
+        });
+      }
+    }
+
     // Profanity filter on messages and nicknames
     let filteredMessage = cleanMessage;
     let filteredNickname = cleanNickname;
-    if (settings.filterProfanity) {
+    if (settings.profanityFilter !== false) {
       if (cleanMessage && containsProfanity(cleanMessage)) {
         filteredMessage = filterProfanity(cleanMessage);
       }
@@ -115,9 +175,12 @@ router.post('/events/:eventId/requests', (req, res) => {
     }
 
     const id = uuidv4();
-    db.prepare(`INSERT INTO requests (id, event_id, song_title, artist_name, album_art_url, duration_ms, explicit_flag, itunes_track_id, requested_by, nickname, message)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(id, eventId, cleanSongTitle, cleanArtistName, albumArtUrl || null, durationMs || null, explicitFlag ? 1 : 0, itunesTrackId || null, cleanRequestedBy, filteredNickname, filteredMessage);
+    // Determine initial status: 'pending' if requireApproval, 'queued' otherwise
+    const initialStatus = settings.requireApproval ? 'pending' : 'queued';
+
+    db.prepare(`INSERT INTO requests (id, event_id, song_title, artist_name, album_art_url, duration_ms, explicit_flag, itunes_track_id, requested_by, nickname, message, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(id, eventId, cleanSongTitle, cleanArtistName, albumArtUrl || null, durationMs || null, explicitFlag ? 1 : 0, itunesTrackId || null, cleanRequestedBy, filteredNickname, filteredMessage, initialStatus);
 
     const request = db.prepare('SELECT * FROM requests WHERE id = ?').get(id);
     res.status(201).json(formatRequest(request));
@@ -131,8 +194,50 @@ router.post('/events/:eventId/requests', (req, res) => {
 router.get('/events/:eventId/requests', (req, res) => {
   try {
     const { eventId } = req.params;
-    const requests = db.prepare('SELECT * FROM requests WHERE event_id = ? ORDER BY vote_count DESC, created_at ASC').all(eventId);
-    res.json(requests.map(formatRequest));
+    const { userId } = req.query; // Optional: attendee user ID for vote tracking
+    // Sort: manually ordered songs first (by manual_order), then auto-sort by vote count (highest first)
+    const requests = db.prepare('SELECT * FROM requests WHERE event_id = ? ORDER BY CASE WHEN manual_order IS NOT NULL THEN 0 ELSE 1 END, manual_order ASC, vote_count DESC, created_at ASC').all(eventId);
+
+    // Calculate recent votes (last hour) for trending indicators
+    const recentVotesStmt = db.prepare(
+      'SELECT COUNT(*) as count FROM votes WHERE request_id = ? AND created_at >= datetime(\'now\', \'-1 hour\')'
+    );
+
+    // Get voter nicknames for social proof display
+    const voterNicknamesStmt = db.prepare(
+      `SELECT DISTINCT r.nickname FROM votes v
+       JOIN requests r ON r.requested_by = v.user_id AND r.event_id = ?
+       WHERE v.request_id = ? AND r.nickname IS NOT NULL AND r.nickname != ''
+       LIMIT 3`
+    );
+    const voterCountStmt = db.prepare(
+      'SELECT COUNT(*) as count FROM votes WHERE request_id = ?'
+    );
+
+    // Check if specific user voted for each request
+    const userVoteStmt = userId ? db.prepare(
+      'SELECT id FROM votes WHERE request_id = ? AND user_id = ?'
+    ) : null;
+
+    res.json(requests.map(r => {
+      const recentVotes = recentVotesStmt.get(r.id)?.count || 0;
+      const formatted = formatRequest(r);
+      formatted.recentVotes = recentVotes;
+      formatted.trending = recentVotes >= 3;
+
+      // Social proof: voter nicknames
+      const totalVoters = voterCountStmt.get(r.id)?.count || 0;
+      const voterNames = voterNicknamesStmt.all(eventId, r.id).map(v => v.nickname);
+      formatted.voterNames = voterNames;
+      formatted.totalVoters = totalVoters;
+
+      // User vote tracking
+      if (userVoteStmt) {
+        formatted.votedByUser = !!userVoteStmt.get(r.id, userId);
+      }
+
+      return formatted;
+    }));
   } catch (err) {
     console.error('List requests error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -205,6 +310,74 @@ router.put('/events/:eventId/requests/:requestId/status', authenticateToken, (re
   }
 });
 
+// PUT /api/events/:eventId/requests/:requestId/order - Set manual order (DJ only)
+router.put('/events/:eventId/requests/:requestId/order', authenticateToken, (req, res) => {
+  try {
+    const { manualOrder } = req.body;
+
+    const request = db.prepare('SELECT r.*, e.dj_id FROM requests r JOIN events e ON r.event_id = e.id WHERE r.id = ? AND r.event_id = ?')
+      .get(req.params.requestId, req.params.eventId);
+
+    if (!request) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    if (request.dj_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    // manualOrder can be null (to remove manual ordering) or a number
+    const orderValue = (manualOrder === null || manualOrder === undefined) ? null : parseInt(manualOrder, 10);
+
+    db.prepare('UPDATE requests SET manual_order = ?, updated_at = datetime(\'now\') WHERE id = ?')
+      .run(orderValue, req.params.requestId);
+
+    const updated = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.requestId);
+    res.json(formatRequest(updated));
+  } catch (err) {
+    console.error('Update request order error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/events/:eventId/requests/:requestId/voters - Get voter details (DJ only)
+router.get('/events/:eventId/requests/:requestId/voters', authenticateToken, (req, res) => {
+  try {
+    const request = db.prepare('SELECT r.*, e.dj_id FROM requests r JOIN events e ON r.event_id = e.id WHERE r.id = ? AND r.event_id = ?')
+      .get(req.params.requestId, req.params.eventId);
+
+    if (!request) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    if (request.dj_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    // Get all voters with their nicknames (from their requests in this event)
+    const voters = db.prepare(
+      `SELECT v.user_id, v.created_at,
+        (SELECT r2.nickname FROM requests r2 WHERE r2.requested_by = v.user_id AND r2.event_id = ? AND r2.nickname IS NOT NULL AND r2.nickname != '' LIMIT 1) as nickname
+       FROM votes v
+       WHERE v.request_id = ?
+       ORDER BY v.created_at ASC`
+    ).all(req.params.eventId, req.params.requestId);
+
+    res.json({
+      requestId: req.params.requestId,
+      totalVoters: voters.length,
+      voters: voters.map(v => ({
+        userId: v.user_id,
+        nickname: v.nickname || null,
+        votedAt: v.created_at
+      }))
+    });
+  } catch (err) {
+    console.error('Get voters error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // DELETE /api/events/:eventId/requests/:requestId - Remove request (DJ only)
 router.delete('/events/:eventId/requests/:requestId', authenticateToken, (req, res) => {
   try {
@@ -241,6 +414,52 @@ router.post('/events/:eventId/requests/:requestId/vote', (req, res) => {
       .get(req.params.requestId, req.params.eventId);
     if (!request) {
       return res.status(404).json({ error: 'Request not found' });
+    }
+
+    // Check request status - only pending/queued songs can be voted on
+    if (request.status !== 'pending' && request.status !== 'queued') {
+      return res.status(403).json({
+        error: 'Voting is only allowed on pending or queued songs.',
+        reason: 'vote_locked',
+        currentStatus: request.status
+      });
+    }
+
+    // Check voting schedule
+    const event = db.prepare('SELECT settings FROM events WHERE id = ?').get(req.params.eventId);
+    if (event) {
+      const settings = JSON.parse(event.settings || '{}');
+      if (settings.votingSchedule === 'scheduled' && settings.votingOpenTime) {
+        const openTime = new Date(settings.votingOpenTime).getTime();
+        if (Date.now() < openTime) {
+          return res.status(403).json({
+            error: 'Voting has not opened yet.',
+            votingOpensAt: settings.votingOpenTime,
+            reason: 'voting_not_open'
+          });
+        }
+      }
+    }
+
+    // Check if voting is closed (manually or scheduled)
+    if (event) {
+      const closeSettings = JSON.parse(event.settings || '{}');
+      if (closeSettings.votingClosed) {
+        return res.status(403).json({
+          error: 'Voting is currently closed.',
+          reason: 'voting_closed'
+        });
+      }
+      if (closeSettings.votingCloseMode === 'scheduled' && closeSettings.votingCloseTime) {
+        const closeTime = new Date(closeSettings.votingCloseTime).getTime();
+        if (Date.now() >= closeTime) {
+          return res.status(403).json({
+            error: 'Voting has closed.',
+            votingClosedAt: closeSettings.votingCloseTime,
+            reason: 'voting_closed_scheduled'
+          });
+        }
+      }
     }
 
     // Check if already voted
@@ -292,5 +511,34 @@ function formatRequest(req) {
     updatedAt: req.updated_at
   };
 }
+
+
+// Resolve code word to attendee ID
+router.post('/code-word', (req, res) => {
+  try {
+    const { codeWord } = req.body;
+    if (!codeWord || typeof codeWord !== 'string' || codeWord.trim().length < 3) {
+      return res.status(400).json({ error: 'Code word must be at least 3 characters' });
+    }
+
+    const normalizedCode = codeWord.trim().toLowerCase();
+
+    // Check if code word already exists
+    let identity = db.prepare('SELECT * FROM attendee_identities WHERE code_word = ?').get(normalizedCode);
+
+    if (!identity) {
+      // Generate a new attendee ID for this code word
+      const { v4: uuidv4 } = require('uuid');
+      const newAttendeeId = uuidv4();
+      db.prepare('INSERT INTO attendee_identities (code_word, attendee_id) VALUES (?, ?)').run(normalizedCode, newAttendeeId);
+      identity = { code_word: normalizedCode, attendee_id: newAttendeeId };
+    }
+
+    res.json({ attendeeId: identity.attendee_id, codeWord: normalizedCode });
+  } catch (err) {
+    console.error('Code word error:', err);
+    res.status(500).json({ error: 'Failed to resolve code word' });
+  }
+});
 
 module.exports = router;

@@ -37,10 +37,10 @@ export const api = {
       body: JSON.stringify({ email, password, displayName }),
     }),
 
-  login: (email, password) =>
+  login: (email, password, totpCode) =>
     apiRequest('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, ...(totpCode ? { totpCode } : {}) }),
     }),
 
   logout: () =>
@@ -59,6 +59,60 @@ export const api = {
     apiRequest('/api/auth/profile', {
       method: 'PUT',
       body: JSON.stringify({ displayName }),
+    }),
+
+
+  // 2FA
+  get2FAStatus: () =>
+    apiRequest('/api/auth/2fa/status'),
+
+  setup2FA: () =>
+    apiRequest('/api/auth/2fa/setup', { method: 'POST' }),
+
+  verify2FA: (code) =>
+    apiRequest('/api/auth/2fa/verify', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
+
+  disable2FA: (password) =>
+    apiRequest('/api/auth/2fa/disable', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+
+  validate2FA: (code, tempToken) =>
+    apiRequest('/api/auth/2fa/validate', {
+      method: 'POST',
+      body: JSON.stringify({ code, tempToken }),
+    }),
+
+
+  // Notification Preferences
+  getNotificationPreferences: () =>
+    apiRequest('/api/auth/notification-preferences'),
+
+  updateNotificationPreferences: (prefs) =>
+    apiRequest('/api/auth/notification-preferences', {
+      method: 'PUT',
+      body: JSON.stringify(prefs),
+    }),
+
+
+  // Default Event Settings
+  getDefaultEventSettings: () =>
+    apiRequest('/api/auth/default-event-settings'),
+
+  resolveCodeWord: (codeWord) =>
+    apiRequest('/api/code-word', {
+      method: 'POST',
+      body: JSON.stringify({ codeWord }),
+    }),
+
+  updateDefaultEventSettings: (settings) =>
+    apiRequest('/api/auth/default-event-settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
     }),
 
   // Events
@@ -93,8 +147,8 @@ export const api = {
       body: JSON.stringify(requestData),
     }),
 
-  getRequests: (eventId) =>
-    apiRequest(`/api/events/${eventId}/requests`),
+  getRequests: (eventId, userId) =>
+    apiRequest(`/api/events/${eventId}/requests${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`),
 
   updateRequestStatus: (eventId, requestId, status) =>
     apiRequest(`/api/events/${eventId}/requests/${requestId}/status`, {
@@ -117,6 +171,15 @@ export const api = {
       body: JSON.stringify({ userId }),
     }),
 
+  updateRequestOrder: (eventId, requestId, manualOrder) =>
+    apiRequest(`/api/events/${eventId}/requests/${requestId}/order`, {
+      method: 'PUT',
+      body: JSON.stringify({ manualOrder }),
+    }),
+
+  getRequestVoters: (eventId, requestId) =>
+    apiRequest(`/api/events/${eventId}/requests/${requestId}/voters`),
+
   // Songs
   searchSongs: (query) =>
     apiRequest(`/api/songs/search?q=${encodeURIComponent(query)}`),
@@ -133,6 +196,25 @@ export const api = {
 
   deleteDJMessage: (eventId, messageId) =>
     apiRequest(`/api/events/${eventId}/messages/${messageId}`, { method: 'DELETE' }),
+
+  // Templates
+  getTemplates: () =>
+    apiRequest('/api/templates'),
+
+  createTemplate: (name, settings) =>
+    apiRequest('/api/templates', {
+      method: 'POST',
+      body: JSON.stringify({ name, settings }),
+    }),
+
+  updateTemplate: (id, name, settings) =>
+    apiRequest(`/api/templates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name, settings }),
+    }),
+
+  deleteTemplate: (id) =>
+    apiRequest(`/api/templates/${id}`, { method: 'DELETE' }),
 
   // Health
   healthCheck: () =>

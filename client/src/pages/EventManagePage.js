@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown } from 'lucide-react';
+// eslint-disable-next-line no-unused-vars
+import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users } from 'lucide-react';
 import { api } from '../config/api';
+import { useTheme } from '../contexts/ThemeContext';
 import EventSettingsForm from '../components/EventSettingsForm';
+import { QRCodeCanvas } from 'qrcode.react';
 
 export default function EventManagePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { darkMode, toggleTheme } = useTheme();
   const location = useLocation();
   const [event, setEvent] = useState(null);
   const [requests, setRequests] = useState([]);
@@ -22,6 +26,9 @@ export default function EventManagePage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [allEvents, setAllEvents] = useState([]);
   const [showEventDropdown, setShowEventDropdown] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [expandedVoters, setExpandedVoters] = useState({});
+  const [voterData, setVoterData] = useState({});
 
   // Determine active view from URL path
   const pathParts = location.pathname.split('/');
@@ -47,6 +54,15 @@ export default function EventManagePage() {
       console.error('Failed to load requests:', err);
     }
   }, [id]);
+
+  // Poll for real-time updates (new requests, vote changes)
+  useEffect(() => {
+    if (!id) return;
+    const djPollInterval = setInterval(() => {
+      loadRequests();
+    }, 3000); // Poll every 3 seconds for real-time vote updates
+    return () => clearInterval(djPollInterval);
+  }, [id, loadRequests]);
 
   useEffect(() => {
     loadEvent();
@@ -157,6 +173,40 @@ export default function EventManagePage() {
     }
   }
 
+  async function handleEventStatusChange(newStatus) {
+    try {
+      await api.updateEvent(id, { status: newStatus });
+      setEvent(prev => ({ ...prev, status: newStatus }));
+    } catch (err) {
+      setError('Failed to update event status');
+    }
+  }
+
+  async function toggleVoters(requestId) {
+    if (expandedVoters[requestId]) {
+      setExpandedVoters(prev => ({ ...prev, [requestId]: false }));
+      return;
+    }
+    try {
+      const data = await api.getRequestVoters(id, requestId);
+      setVoterData(prev => ({ ...prev, [requestId]: data }));
+      setExpandedVoters(prev => ({ ...prev, [requestId]: true }));
+    } catch (err) {
+      console.error('Failed to load voters:', err);
+    }
+  }
+
+  function getStatusBadge(s) {
+    switch(s) {
+      case 'active':
+        return { label: 'Live', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', icon: Radio };
+      case 'completed':
+        return { label: 'Completed', color: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300', icon: Check };
+      default:
+        return { label: 'Upcoming', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', icon: Clock };
+    }
+  }
+
   const pendingRequests = requests.filter(r => r.status === 'pending');
   const otherRequests = requests.filter(r => r.status !== 'pending');
 
@@ -192,8 +242,28 @@ export default function EventManagePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex">
+      {/* Mobile Top Bar */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+        <button
+          onClick={() => setMobileSidebarOpen(true)}
+          className="p-1 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+        <Music className="w-5 h-5 text-primary-500" />
+        <h2 className="font-bold text-slate-900 dark:text-white truncate">{event?.name}</h2>
+      </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {mobileSidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col min-h-screen">
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col min-h-screen transform transition-transform duration-200 ease-in-out ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         {/* Sidebar Header */}
         <div className="p-4 border-b border-slate-200 dark:border-slate-700">
           <button
@@ -248,7 +318,7 @@ export default function EventManagePage() {
             return (
               <button
                 key={link.key}
-                onClick={() => navigate(link.path)}
+                onClick={() => { navigate(link.path); setMobileSidebarOpen(false); }}
                 className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ' +
                   (isActive
                     ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
@@ -263,8 +333,16 @@ export default function EventManagePage() {
           })}
         </nav>
 
-        {/* Delete Event Button */}
-        <div className="p-3 border-t border-slate-200 dark:border-slate-700">
+        {/* Theme Toggle & Delete Event */}
+        <div className="p-3 border-t border-slate-200 dark:border-slate-700 space-y-1">
+          <button
+            onClick={toggleTheme}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition-colors text-sm font-medium"
+            data-theme-toggle
+          >
+            {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {darkMode ? 'Light Mode' : 'Dark Mode'}
+          </button>
           <button
             onClick={() => setShowDeleteDialog(true)}
             className="w-full flex items-center gap-2 px-3 py-2.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-sm font-medium"
@@ -277,7 +355,7 @@ export default function EventManagePage() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-screen">
-        <main className="flex-1 p-8 max-w-4xl">
+        <main className="flex-1 p-4 pt-16 lg:p-8 lg:pt-8 max-w-4xl w-full">
           {error && (
             <div className="mb-6 bg-red-500/10 border border-red-500/50 rounded-lg p-3 text-red-600 dark:text-red-400 text-sm">
               {error}
@@ -288,7 +366,48 @@ export default function EventManagePage() {
             <>
               {/* Event Info Header */}
               <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-6">
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">{event?.name}</h2>
+                <div className="flex flex-wrap items-center gap-3 mb-3">
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white">{event?.name}</h2>
+                  {(() => {
+                    const badge = getStatusBadge(event?.status);
+                    const BadgeIcon = badge.icon;
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${badge.color}`}>
+                        <BadgeIcon className="w-3 h-3" />
+                        {badge.label}
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {event?.status !== 'active' && event?.status !== 'completed' && (
+                    <button
+                      onClick={() => handleEventStatusChange('active')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition-colors"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      Go Live
+                    </button>
+                  )}
+                  {event?.status === 'active' && (
+                    <button
+                      onClick={() => handleEventStatusChange('completed')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-500 text-white text-xs font-medium rounded-lg hover:bg-slate-600 transition-colors"
+                    >
+                      <StopCircle className="w-3.5 h-3.5" />
+                      End Event
+                    </button>
+                  )}
+                  {event?.status === 'completed' && (
+                    <button
+                      onClick={() => handleEventStatusChange('upcoming')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      Reopen
+                    </button>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-4 text-sm text-slate-600 dark:text-slate-300">
                   {event?.date && (
                     <div className="flex items-center gap-1.5">
@@ -312,6 +431,65 @@ export default function EventManagePage() {
                 {event?.description && (
                   <p className="mt-3 text-slate-500 dark:text-slate-400 text-sm">{event.description}</p>
                 )}
+              </div>
+
+
+              {/* Share & QR Code */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-6">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Share Event</h3>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 dark:border-slate-300 flex-shrink-0">
+                    <QRCodeCanvas
+                      value={window.location.origin + '/e/' + id}
+                      size={160}
+                      level="H"
+                      includeMargin={false}
+                      id="event-qr-code"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">Attendees can scan this QR code or visit:</p>
+                    <div className="flex items-center gap-2 mb-4">
+                      <code className="flex-1 text-sm bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg truncate">
+                        {window.location.origin}/e/{id}
+                      </code>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(window.location.origin + '/e/' + id);
+                          alert('URL copied to clipboard!');
+                        }}
+                        className="p-2 text-slate-500 hover:text-primary-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors flex-shrink-0"
+                        title="Copy URL"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <a
+                        href={'/e/' + id}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 text-slate-500 hover:text-primary-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors flex-shrink-0"
+                        title="Open event page"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const canvas = document.getElementById('event-qr-code');
+                        if (canvas) {
+                          const link = document.createElement('a');
+                          link.download = (event?.name || 'event').replace(/[^a-zA-Z0-9]/g, '_') + '_QR.png';
+                          link.href = canvas.toDataURL('image/png');
+                          link.click();
+                        }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download QR Code
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Song Requests Queue */}
@@ -352,47 +530,73 @@ export default function EventManagePage() {
                         </div>
                         <div className="space-y-2">
                           {pendingRequests.map(request => (
-                            <div
-                              key={request.id}
-                              className={'flex items-center gap-3 p-3 rounded-lg border transition-colors ' +
-                                (selectedRequests.has(request.id)
-                                  ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-700'
-                                  : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600')
-                              }
-                            >
-                              <button
-                                onClick={() => toggleSelect(request.id)}
-                                className="text-slate-400 hover:text-primary-500 transition-colors flex-shrink-0"
+                            <div key={request.id}>
+                              <div
+                                className={'flex items-center gap-3 p-3 rounded-lg border transition-colors ' +
+                                  (selectedRequests.has(request.id)
+                                    ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-700'
+                                    : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600')
+                                }
                               >
-                                {selectedRequests.has(request.id) ? (
-                                  <CheckSquare className="w-5 h-5 text-primary-500" />
-                                ) : (
-                                  <Square className="w-5 h-5" />
-                                )}
-                              </button>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-slate-900 dark:text-white truncate">{request.song?.title}</p>
-                                <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{request.song?.artist}</p>
-                              </div>
-                              <div className="flex items-center gap-1 text-sm text-slate-500">
-                                <span>{request.voteCount || 0} votes</span>
-                              </div>
-                              <div className="flex items-center gap-1 flex-shrink-0">
                                 <button
-                                  onClick={() => handleStatusChange(request.id, 'queued')}
-                                  className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
-                                  title="Approve"
+                                  onClick={() => toggleSelect(request.id)}
+                                  className="text-slate-400 hover:text-primary-500 transition-colors flex-shrink-0"
                                 >
-                                  <Check className="w-4 h-4" />
+                                  {selectedRequests.has(request.id) ? (
+                                    <CheckSquare className="w-5 h-5 text-primary-500" />
+                                  ) : (
+                                    <Square className="w-5 h-5" />
+                                  )}
                                 </button>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-slate-900 dark:text-white truncate">
+                                    {request.song?.title}
+                                    {request.song?.explicitFlag && event?.settings?.warnExplicit !== false && (
+                                      <span className="inline-flex items-center ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded" title="Explicit content">E</span>
+                                    )}
+                                  </p>
+                                  <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{request.song?.artist}</p>
+                                  {request.requestedBy?.nickname && (
+                                    <p className="text-xs text-primary-500 dark:text-primary-400 truncate">🎵 {request.requestedBy.nickname}</p>
+                                  )}
+                                </div>
                                 <button
-                                  onClick={() => handleStatusChange(request.id, 'rejected')}
-                                  className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                  title="Reject"
+                                  onClick={() => (request.voteCount || 0) > 0 && toggleVoters(request.id)}
+                                  className={`flex items-center gap-1 text-sm ${(request.voteCount || 0) > 0 ? 'text-primary-500 hover:text-primary-600 cursor-pointer' : 'text-slate-500 cursor-default'}`}
+                                  title={(request.voteCount || 0) > 0 ? 'Click to see voters' : ''}
                                 >
-                                  <X className="w-4 h-4" />
+                                  <Users className="w-3.5 h-3.5" />
+                                  <span>{request.voteCount || 0} votes</span>
                                 </button>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <button
+                                    onClick={() => handleStatusChange(request.id, 'queued')}
+                                    className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                                    title="Approve"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleStatusChange(request.id, 'rejected')}
+                                    className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                    title="Reject"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
                               </div>
+                              {expandedVoters[request.id] && voterData[request.id] && (
+                                <div className="ml-8 mt-1 mb-2 p-2 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-600 text-xs">
+                                  <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">Voters ({voterData[request.id].totalVoters}):</p>
+                                  <ul className="space-y-0.5">
+                                    {voterData[request.id].voters.map((v, i) => (
+                                      <li key={i} className="text-slate-600 dark:text-slate-400">
+                                        {v.nickname ? v.nickname : `Anonymous (${v.userId.slice(0, 8)}...)`}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -412,8 +616,16 @@ export default function EventManagePage() {
                               className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 opacity-60"
                             >
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium text-slate-900 dark:text-white truncate">{request.song?.title}</p>
+                                <p className="font-medium text-slate-900 dark:text-white truncate">
+                                  {request.song?.title}
+                                  {request.song?.explicitFlag && event?.settings?.warnExplicit !== false && (
+                                    <span className="inline-flex items-center ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded" title="Explicit content">E</span>
+                                  )}
+                                </p>
                                 <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{request.song?.artist}</p>
+                                {request.requestedBy?.nickname && (
+                                  <p className="text-xs text-primary-500 dark:text-primary-400 truncate">🎵 {request.requestedBy.nickname}</p>
+                                )}
                               </div>
                               <span className={'text-xs font-medium px-2 py-1 rounded-full ' +
                                 (request.status === 'rejected'
@@ -471,47 +683,73 @@ export default function EventManagePage() {
                     <span className="text-sm text-slate-500 dark:text-slate-400">Select All</span>
                   </div>
                   {pendingRequests.map(request => (
-                    <div
-                      key={request.id}
-                      className={'flex items-center gap-3 p-3 rounded-lg border transition-colors ' +
-                        (selectedRequests.has(request.id)
-                          ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-700'
-                          : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600')
-                      }
-                    >
-                      <button
-                        onClick={() => toggleSelect(request.id)}
-                        className="text-slate-400 hover:text-primary-500 transition-colors flex-shrink-0"
+                    <div key={request.id}>
+                      <div
+                        className={'flex items-center gap-3 p-3 rounded-lg border transition-colors ' +
+                          (selectedRequests.has(request.id)
+                            ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-700'
+                            : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600')
+                        }
                       >
-                        {selectedRequests.has(request.id) ? (
-                          <CheckSquare className="w-5 h-5 text-primary-500" />
-                        ) : (
-                          <Square className="w-5 h-5" />
-                        )}
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 dark:text-white truncate">{request.song?.title}</p>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{request.song?.artist}</p>
-                      </div>
-                      <div className="flex items-center gap-1 text-sm text-slate-500">
-                        <span>{request.voteCount || 0} votes</span>
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
                         <button
-                          onClick={() => handleStatusChange(request.id, 'queued')}
-                          className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
-                          title="Approve"
+                          onClick={() => toggleSelect(request.id)}
+                          className="text-slate-400 hover:text-primary-500 transition-colors flex-shrink-0"
                         >
-                          <Check className="w-4 h-4" />
+                          {selectedRequests.has(request.id) ? (
+                            <CheckSquare className="w-5 h-5 text-primary-500" />
+                          ) : (
+                            <Square className="w-5 h-5" />
+                          )}
                         </button>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-slate-900 dark:text-white truncate">
+                            {request.song?.title}
+                            {request.song?.explicitFlag && event?.settings?.warnExplicit !== false && (
+                              <span className="inline-flex items-center ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded" title="Explicit content">E</span>
+                            )}
+                          </p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{request.song?.artist}</p>
+                          {request.requestedBy?.nickname && (
+                            <p className="text-xs text-primary-500 dark:text-primary-400 truncate">🎵 {request.requestedBy.nickname}</p>
+                          )}
+                        </div>
                         <button
-                          onClick={() => handleStatusChange(request.id, 'rejected')}
-                          className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                          title="Reject"
+                          onClick={() => (request.voteCount || 0) > 0 && toggleVoters(request.id)}
+                          className={`flex items-center gap-1 text-sm ${(request.voteCount || 0) > 0 ? 'text-primary-500 hover:text-primary-600 cursor-pointer' : 'text-slate-500 cursor-default'}`}
+                          title={(request.voteCount || 0) > 0 ? 'Click to see voters' : ''}
                         >
-                          <X className="w-4 h-4" />
+                          <Users className="w-3.5 h-3.5" />
+                          <span>{request.voteCount || 0} votes</span>
                         </button>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => handleStatusChange(request.id, 'queued')}
+                            className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                            title="Approve"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleStatusChange(request.id, 'rejected')}
+                            className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                            title="Reject"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
+                      {expandedVoters[request.id] && voterData[request.id] && (
+                        <div className="ml-8 mt-1 mb-2 p-2 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-600 text-xs">
+                          <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">Voters ({voterData[request.id].totalVoters}):</p>
+                          <ul className="space-y-0.5">
+                            {voterData[request.id].voters.map((v, i) => (
+                              <li key={i} className="text-slate-600 dark:text-slate-400">
+                                {v.nickname ? v.nickname : `Anonymous (${v.userId.slice(0, 8)}...)`}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

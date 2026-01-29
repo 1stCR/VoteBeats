@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Music, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../config/api';
@@ -16,6 +16,16 @@ export default function EventCreatePage() {
     description: '',
   });
 
+
+  const [defaultSettings, setDefaultSettings] = useState(null);
+
+  // Load default event settings
+  useEffect(() => {
+    api.getDefaultEventSettings()
+      .then(data => setDefaultSettings(data))
+      .catch(() => {});
+  }, []);
+
   function handleChange(e) {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   }
@@ -29,14 +39,25 @@ export default function EventCreatePage() {
     setError('');
     setLoading(true);
     try {
-      const result = await api.createEvent({
+      const eventData = {
         name: form.name.trim(),
         date: form.date || null,
         location: form.location.trim() || null,
         start_time: form.startTime || null,
         end_time: form.endTime || null,
         description: form.description.trim() || null,
-      });
+      };
+      // Apply default settings if available
+      if (defaultSettings) {
+        eventData.settings = JSON.stringify({
+          blockExplicit: defaultSettings.blockExplicit || false,
+          votingEnabled: defaultSettings.votingEnabled !== false,
+          requestsOpen: defaultSettings.requestsOpen !== false,
+          maxRequestsPerUser: defaultSettings.maxRequestsPerUser || 0,
+          autoApprove: defaultSettings.autoApprove || false,
+        });
+      }
+      await api.createEvent(eventData);
       navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Failed to create event');
@@ -68,6 +89,11 @@ export default function EventCreatePage() {
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">New Event</h2>
           <p className="text-slate-500 dark:text-slate-400 mb-8">Set up your event details and start collecting song requests.</p>
+          {defaultSettings && (defaultSettings.blockExplicit || !defaultSettings.votingEnabled || !defaultSettings.requestsOpen || defaultSettings.autoApprove || defaultSettings.maxRequestsPerUser > 0) && (
+            <div className="mb-6 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-3 text-primary-700 dark:text-primary-300 text-sm">
+              Your default event settings will be applied. You can change them later in event settings.
+            </div>
+          )}
 
           {error && (
             <div className="mb-6 bg-red-500/10 border border-red-500/50 rounded-lg p-3 text-red-600 dark:text-red-400 text-sm">

@@ -51,7 +51,7 @@ router.post('/register', (req, res) => {
 // POST /api/auth/login
 router.post('/login', (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, totpCode } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -65,6 +65,37 @@ router.post('/login', (req, res) => {
     const validPassword = bcrypt.compareSync(password, user.password_hash);
     if (!validPassword) {
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Check if 2FA is enabled
+    if (user.totp_enabled && user.totp_secret) {
+      // If no TOTP code provided, return a temp token indicating 2FA is required
+      if (!totpCode) {
+        const jwt = require('jsonwebtoken');
+        const { JWT_SECRET } = require('../middleware/auth');
+        const tempToken = jwt.sign(
+          { id: user.id, email: user.email, requires2FA: true },
+          JWT_SECRET,
+          { expiresIn: '5m' }
+        );
+        return res.json({
+          requires2FA: true,
+          tempToken
+        });
+      }
+
+      // Verify TOTP code
+      const speakeasy = require('speakeasy');
+      const verified = speakeasy.totp.verify({
+        secret: user.totp_secret,
+        encoding: 'base32',
+        token: totpCode,
+        window: 2,
+      });
+
+      if (!verified) {
+        return res.status(401).json({ error: 'Invalid 2FA code' });
+      }
     }
 
     const token = generateToken(user);
@@ -129,6 +160,92 @@ router.put('/profile', authenticateToken, (req, res) => {
     res.json({ id: req.user.id, email: req.user.email, displayName: cleanDisplayName });
   } catch (err) {
     console.error('Profile update error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+// GET /api/auth/notification-preferences
+router.get('/notification-preferences', authenticateToken, (req, res) => {
+  try {
+    const user = db.prepare('SELECT notification_preferences FROM users WHERE id = ?').get(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const prefs = JSON.parse(user.notification_preferences || '{}');
+    // Return with defaults
+    res.json({
+      newRequests: prefs.newRequests !== undefined ? prefs.newRequests : true,
+      requestVotes: prefs.requestVotes !== undefined ? prefs.requestVotes : true,
+      eventReminders: prefs.eventReminders !== undefined ? prefs.eventReminders : true,
+      attendeeMessages: prefs.attendeeMessages !== undefined ? prefs.attendeeMessages : true,
+      weeklyDigest: prefs.weeklyDigest !== undefined ? prefs.weeklyDigest : false,
+      soundAlerts: prefs.soundAlerts !== undefined ? prefs.soundAlerts : true,
+    });
+  } catch (err) {
+    console.error('Get notification preferences error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/auth/notification-preferences
+router.put('/notification-preferences', authenticateToken, (req, res) => {
+  try {
+    const prefs = req.body;
+    const sanitized = {
+      newRequests: !!prefs.newRequests,
+      requestVotes: !!prefs.requestVotes,
+      eventReminders: !!prefs.eventReminders,
+      attendeeMessages: !!prefs.attendeeMessages,
+      weeklyDigest: !!prefs.weeklyDigest,
+      soundAlerts: !!prefs.soundAlerts,
+    };
+    db.prepare("UPDATE users SET notification_preferences = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(JSON.stringify(sanitized), req.user.id);
+    res.json(sanitized);
+  } catch (err) {
+    console.error('Update notification preferences error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+// GET /api/auth/default-event-settings
+router.get('/default-event-settings', authenticateToken, (req, res) => {
+  try {
+    const user = db.prepare('SELECT default_event_settings FROM users WHERE id = ?').get(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const defaults = JSON.parse(user.default_event_settings || '{}');
+    res.json({
+      blockExplicit: defaults.blockExplicit !== undefined ? defaults.blockExplicit : false,
+      votingEnabled: defaults.votingEnabled !== undefined ? defaults.votingEnabled : true,
+      requestsOpen: defaults.requestsOpen !== undefined ? defaults.requestsOpen : true,
+      maxRequestsPerUser: defaults.maxRequestsPerUser || 0,
+      autoApprove: defaults.autoApprove !== undefined ? defaults.autoApprove : false,
+    });
+  } catch (err) {
+    console.error('Get default event settings error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/auth/default-event-settings
+router.put('/default-event-settings', authenticateToken, (req, res) => {
+  try {
+    const settings = {
+      blockExplicit: !!req.body.blockExplicit,
+      votingEnabled: req.body.votingEnabled !== false,
+      requestsOpen: req.body.requestsOpen !== false,
+      maxRequestsPerUser: parseInt(req.body.maxRequestsPerUser) || 0,
+      autoApprove: !!req.body.autoApprove,
+    };
+    db.prepare("UPDATE users SET default_event_settings = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(JSON.stringify(settings), req.user.id);
+    res.json(settings);
+  } catch (err) {
+    console.error('Update default event settings error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

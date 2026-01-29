@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { Music, Search, Send, ThumbsUp, Clock, ListMusic, User } from 'lucide-react';
+import { Music, Search, Send, ThumbsUp, ListMusic, User, Link2, Flame } from 'lucide-react';
 import { api } from '../config/api';
+
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 function getAttendeeId() {
   let id = localStorage.getItem('votebeats_attendee_id');
   if (!id) {
-    id = 'attendee-' + Math.random().toString(36).substr(2, 9);
+    id = generateUUID();
     localStorage.setItem('votebeats_attendee_id', id);
   }
   return id;
@@ -22,8 +30,14 @@ export default function EventPublicPage() {
   const [activeTab, setActiveTab] = useState('request');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [manualTitle, setManualTitle] = useState('');
+  const [manualArtist, setManualArtist] = useState('');
   const [searching, setSearching] = useState(false);
-  const [nickname, setNickname] = useState('');
+  const [nickname, setNickname] = useState(() => localStorage.getItem('votebeats_nickname') || '');
+  const [codeWord, setCodeWord] = useState(() => localStorage.getItem('votebeats_codeword') || '');
+  const [showCodeWordInput, setShowCodeWordInput] = useState(false);
+  const [codeWordLinked, setCodeWordLinked] = useState(!!localStorage.getItem('votebeats_codeword'));
   const [message, setMessage] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
 
@@ -38,14 +52,49 @@ export default function EventPublicPage() {
     }
   }, [eventId]);
 
+
   const fetchRequests = useCallback(async () => {
     try {
-      const data = await api.getRequests(eventId);
+      const data = await api.getRequests(eventId, attendeeId);
       setRequests(data);
     } catch (err) {
       console.error('Failed to fetch requests');
     }
-  }, [eventId]);
+  }, [eventId, attendeeId]);
+
+  // Poll for real-time updates (vote counts, status changes)
+  useEffect(() => {
+    if (!eventId || loading) return;
+    const pollInterval = setInterval(() => {
+      fetchRequests();
+    }, 3000); // Poll every 3 seconds for real-time vote updates
+    return () => clearInterval(pollInterval);
+  }, [eventId, loading, fetchRequests]);
+
+  // Resolve code word to linked attendee ID
+  useEffect(() => {
+    if (codeWord && codeWord.length >= 3) {
+      localStorage.setItem('votebeats_codeword', codeWord);
+      api.resolveCodeWord(codeWord)
+        .then(data => {
+          localStorage.setItem('votebeats_attendee_id', data.attendeeId);
+          setCodeWordLinked(true);
+        })
+        .catch(() => {});
+    } else if (!codeWord) {
+      localStorage.removeItem('votebeats_codeword');
+      setCodeWordLinked(false);
+    }
+  }, [codeWord]);
+
+  // Persist nickname to localStorage
+  useEffect(() => {
+    if (nickname) {
+      localStorage.setItem('votebeats_nickname', nickname);
+    } else {
+      localStorage.removeItem('votebeats_nickname');
+    }
+  }, [nickname]);
 
   useEffect(() => {
     async function init() {
@@ -74,6 +123,25 @@ export default function EventPublicPage() {
       setSearchResults([]);
     }
     setSearching(false);
+  }
+
+  function handleManualSubmit() {
+    if (!manualTitle.trim() || !manualArtist.trim()) return;
+    handleSubmitRequest({
+      trackName: manualTitle.trim(),
+      artistName: manualArtist.trim(),
+      trackId: null,
+      artworkUrl100: null,
+      trackTimeMillis: null,
+      trackExplicitness: 'notExplicit',
+    });
+    setManualTitle('');
+    setManualArtist('');
+    setShowManualEntry(false);
+  }
+
+  function isExplicitBlocked() {
+    return event && event.settings && event.settings.blockExplicit !== false;
   }
 
   async function handleSubmitRequest(song) {
@@ -110,6 +178,7 @@ export default function EventPublicPage() {
   }
 
   const myRequests = requests.filter(r => r.requestedBy?.userId === attendeeId);
+  const myVotes = requests.filter(r => r.votedByUser && r.requestedBy?.userId !== attendeeId);
 
   if (loading) {
     return (
@@ -145,6 +214,17 @@ export default function EventPublicPage() {
             <span className="text-sm font-medium opacity-80">VoteBeats</span>
           </div>
           <h1 className="text-2xl font-bold">{event.name}</h1>
+                {event.status === 'completed' && (
+                  <div id="event-status-banner" className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-center py-3 px-4 rounded-xl mb-4 text-sm font-medium">
+                    This event has ended. Song requests are no longer being accepted.
+                  </div>
+                )}
+                {event.status === 'upcoming' && (
+                  <div id="event-status-upcoming" className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-center py-3 px-4 rounded-xl mb-4 text-sm font-medium">
+                    This event hasn't started yet. Stay tuned!
+                  </div>
+                )}
+
           {event.location && <p className="text-sm opacity-80 mt-1">{event.location}</p>}
         </div>
       </header>
@@ -204,7 +284,31 @@ export default function EventPublicPage() {
                   placeholder="Your name (optional)"
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none mb-3"
                 />
-                <div className="flex gap-2">
+                
+                {!showCodeWordInput && !codeWordLinked && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCodeWordInput(true)}
+                    className="text-xs text-primary-500 hover:text-primary-600 flex items-center gap-1 mt-1"
+                  >
+                    <Link2 className="w-3 h-3" />
+                    Link another device
+                  </button>
+                )}
+                {(showCodeWordInput || codeWordLinked) && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Link2 className="w-3 h-3 text-primary-500 flex-shrink-0" />
+                    <input
+                      type="text"
+                      value={codeWord}
+                      onChange={(e) => setCodeWord(e.target.value.trim())}
+                      placeholder="Enter code word..."
+                      className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-1 focus:ring-primary-500 outline-none"
+                    />
+                    {codeWordLinked && <span className="text-xs text-green-500">✓ Linked</span>}
+                  </div>
+                )}
+<div className="flex gap-2">
                   <input
                     type="text"
                     value={searchQuery}
@@ -248,6 +352,59 @@ export default function EventPublicPage() {
                 </div>
               )}
 
+
+              {/* Manual Entry Fallback */}
+              {searchQuery.trim() && !searching && (
+                <div className="mb-4">
+                  {!showManualEntry ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowManualEntry(true)}
+                      className="text-sm text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
+                    >
+                      Can't find your song? Enter it manually
+                    </button>
+                  ) : (
+                    <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 border border-slate-200 dark:border-slate-600">
+                      <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Manual Song Entry</p>
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={manualTitle}
+                          onChange={(e) => setManualTitle(e.target.value)}
+                          placeholder="Song title *"
+                          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-500 rounded-lg bg-white dark:bg-slate-600 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                        />
+                        <input
+                          type="text"
+                          value={manualArtist}
+                          onChange={(e) => setManualArtist(e.target.value)}
+                          placeholder="Artist name *"
+                          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-500 rounded-lg bg-white dark:bg-slate-600 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={handleManualSubmit}
+                            disabled={!manualTitle.trim() || !manualArtist.trim()}
+                            className="px-4 py-2 bg-primary-500 text-white text-sm font-medium rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50"
+                          >
+                            Submit Request
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowManualEntry(false)}
+                            className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="mt-4">
                 <textarea
                   value={message}
@@ -262,31 +419,135 @@ export default function EventPublicPage() {
 
           {activeTab === 'queue' && (
             <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
-                Live Queue ({requests.filter(r => r.status === 'queued' || r.status === 'pending').length})
-              </h2>
-              {requests.filter(r => r.status === 'queued' || r.status === 'pending').length === 0 ? (
-                <p className="text-sm text-slate-500">No songs in the queue yet. Be the first to request!</p>
-              ) : (
-                <div className="space-y-2">
-                  {requests.filter(r => r.status === 'queued' || r.status === 'pending').map(req => (
-                    <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-                      {req.song?.albumArtUrl && (
-                        <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{req.song?.title}</p>
-                        <p className="text-xs text-slate-500 truncate">{req.song?.artist}</p>
-                      </div>
-                      <button
-                        onClick={() => handleVote(req.id)}
-                        className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded-full hover:bg-primary-100 dark:hover:bg-primary-900 transition-colors"
-                      >
-                        <ThumbsUp className="w-3 h-3" />
-                        {req.voteCount || 0}
-                      </button>
+              {(event?.status === 'completed' && event?.settings?.postCloseVisibility === 'hide') ? (
+                <div className="text-center py-8">
+                  <ListMusic className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Playlist Hidden</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">The final playlist will be revealed at the event!</p>
+                </div>
+              ) : (event?.status === 'active' && event?.settings?.duringEventVisibility === 'hide') ? (
+                <div className="text-center py-8">
+                  <ListMusic className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Queue Hidden</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">The DJ has hidden the queue during the event.</p>
+                </div>
+              ) : (event?.status === 'active' && event?.settings?.duringEventVisibility === 'nowPlayingOnly') ? (
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Now Playing</h2>
+                  {requests.filter(r => r.status === 'nowPlaying').length === 0 ? (
+                    <p className="text-sm text-slate-500">Nothing playing right now.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {requests.filter(r => r.status === 'nowPlaying').map(req => (
+                        <div key={req.id} className="flex items-center gap-3 p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800">
+                          {req.song?.albumArtUrl && (
+                            <img src={req.song.albumArtUrl} alt="" className="w-12 h-12 rounded" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{req.song?.title}</p>
+                            <p className="text-xs text-slate-500 truncate">{req.song?.artist}</p>
+                          </div>
+                          <span className="text-xs font-medium text-primary-600 dark:text-primary-400">NOW PLAYING</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
+                </div>
+              ) : event?.settings?.queueVisibility === 'blind' ? (
+                <div className="text-center py-8">
+                  <ListMusic className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Queue is hidden for this event. Submit your requests from the Request tab!</p>
+                </div>
+              ) : event?.settings?.queueVisibility === 'own' ? (
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
+                    Your Queued Songs ({requests.filter(r => (r.status === 'queued' || r.status === 'pending') && r.requestedBy?.userId === attendeeId).length})
+                  </h2>
+                  {requests.filter(r => (r.status === 'queued' || r.status === 'pending') && r.requestedBy?.userId === attendeeId).length === 0 ? (
+                    <p className="text-sm text-slate-500">You don't have any songs in the queue yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {requests.filter(r => (r.status === 'queued' || r.status === 'pending') && r.requestedBy?.userId === attendeeId).map(req => (
+                        <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                          {req.song?.albumArtUrl && (
+                            <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{req.song?.title}</p>
+                            <p className="text-xs text-slate-500 truncate">{req.song?.artist}</p>
+                          </div>
+                          <button
+                            onClick={() => handleVote(req.id)}
+                            className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded-full hover:bg-primary-100 dark:hover:bg-primary-900 transition-colors"
+                          >
+                            <ThumbsUp className="w-3 h-3" />
+                            {req.voteCount || 0}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
+                    Live Queue ({requests.filter(r => r.status === 'queued' || r.status === 'pending').length})
+                  </h2>
+                  {requests.filter(r => r.status === 'queued' || r.status === 'pending').length === 0 ? (
+                    <p className="text-sm text-slate-500">No songs in the queue yet. Be the first to request!</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {requests.filter(r => r.status === 'queued' || r.status === 'pending').map(req => (
+                        <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                          {req.song?.albumArtUrl && (
+                            <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{req.song?.title}</p>
+                              {req.trending && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-xs font-medium rounded-full flex-shrink-0" title={`+${req.recentVotes} votes in last hour`}>
+                                  <Flame className="w-3 h-3" />
+                                  +{req.recentVotes}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 truncate">{req.song?.artist}</p>
+                            {req.totalVoters > 0 && (
+                              <p className="text-xs text-primary-500 dark:text-primary-400 mt-0.5">
+                                {req.voterNames && req.voterNames.length > 0 ? (
+                                  <>
+                                    {req.voterNames.slice(0, 2).join(', ')}
+                                    {req.totalVoters > req.voterNames.length ? (
+                                      <> and {req.totalVoters - req.voterNames.slice(0, 2).length} other{req.totalVoters - req.voterNames.slice(0, 2).length !== 1 ? 's' : ''} voted</>
+                                    ) : req.voterNames.length > 2 ? (
+                                      <> and {req.voterNames.length - 2} other{req.voterNames.length - 2 !== 1 ? 's' : ''} voted</>
+                                    ) : (
+                                      <> voted</>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>{req.totalVoters} {req.totalVoters === 1 ? 'person' : 'people'} voted</>
+                                )}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleVote(req.id)}
+                            className={`flex items-center gap-1 px-2 py-1 text-xs rounded-full transition-colors ${
+                              req.votedByUser
+                                ? 'bg-primary-500 text-white'
+                                : 'bg-slate-200 dark:bg-slate-600 hover:bg-primary-100 dark:hover:bg-primary-900'
+                            }`}
+                            title={req.votedByUser ? 'You voted for this' : 'Vote for this song'}
+                          >
+                            <ThumbsUp className="w-3 h-3" />
+                            {req.voteCount || 0}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -322,6 +583,32 @@ export default function EventPublicPage() {
                         {req.status === 'played' && 'Played'}
                         {req.status === 'rejected' && 'Rejected'}
                         {req.status === 'nowPlaying' && 'Now Playing'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* My Votes section */}
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4 mt-8">
+                My Votes ({myVotes.length})
+              </h2>
+              {myVotes.length === 0 ? (
+                <p className="text-sm text-slate-500">You haven't voted for any other songs yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {myVotes.map(req => (
+                    <div key={req.id} className="flex items-center gap-3 p-3 bg-primary-50 dark:bg-primary-900/10 rounded-lg border border-primary-200 dark:border-primary-800">
+                      {req.song?.albumArtUrl && (
+                        <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{req.song?.title}</p>
+                        <p className="text-xs text-slate-500 truncate">{req.song?.artist}</p>
+                      </div>
+                      <span className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full font-medium bg-primary-500 text-white">
+                        <ThumbsUp className="w-3 h-3" />
+                        {req.voteCount || 0}
                       </span>
                     </div>
                   ))}

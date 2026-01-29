@@ -51,8 +51,20 @@ export function AuthProvider({ children }) {
     return data;
   }, []);
 
-  const login = useCallback(async (email, password) => {
-    const data = await api.login(email, password);
+  const login = useCallback(async (email, password, totpCode) => {
+    const data = await api.login(email, password, totpCode);
+    if (data.requires2FA) {
+      // Return the 2FA requirement - caller handles the UI
+      return data;
+    }
+    localStorage.setItem('votebeats_token', data.token);
+    localStorage.setItem('votebeats_user', JSON.stringify(data.user));
+    setCurrentUser(data.user);
+    return data;
+  }, []);
+
+  const validate2FA = useCallback(async (code, tempToken) => {
+    const data = await api.validate2FA(code, tempToken);
     localStorage.setItem('votebeats_token', data.token);
     localStorage.setItem('votebeats_user', JSON.stringify(data.user));
     setCurrentUser(data.user);
@@ -87,7 +99,8 @@ export function AuthProvider({ children }) {
     register,
     logout,
     resetPassword,
-    updateUser
+    updateUser,
+    validate2FA
   };
 
   return (

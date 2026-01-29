@@ -1,13 +1,11 @@
 // Input sanitization utility to prevent XSS
+// Only escape HTML-dangerous characters (< and >), not quotes/apostrophes
+// React automatically escapes output, so we only need to prevent HTML injection
 function sanitizeString(str) {
   if (typeof str !== 'string') return str;
   return str
-    .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
+    .replace(/>/g, '&gt;');
 }
 
 function sanitizeObject(obj, fields) {

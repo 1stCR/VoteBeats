@@ -1,10 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Music, Users, ThumbsUp, Zap, LogIn, UserPlus, LayoutDashboard } from 'lucide-react';
+import { Music, Users, ThumbsUp, Zap, LogIn, UserPlus, LayoutDashboard, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function LandingPage() {
   const { currentUser } = useAuth();
+  const { darkMode, toggleTheme } = useTheme();
 
   const features = [
     {
@@ -45,6 +47,14 @@ export default function LandingPage() {
             </div>
 
             <div className="flex items-center gap-3">
+              <button
+                onClick={toggleTheme}
+                className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                data-theme-toggle
+              >
+                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
               {currentUser ? (
                 <Link
                   to="/dashboard"

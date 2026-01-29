@@ -7,6 +7,8 @@ const eventRoutes = require('./routes/events');
 const requestRoutes = require('./routes/requests');
 const songRoutes = require('./routes/songs');
 const messageRoutes = require('./routes/messages');
+const twofaRoutes = require('./routes/twofa');
+const templateRoutes = require('./routes/templates');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -28,10 +30,12 @@ app.use((req, res, next) => {
 // because event routes use router.use(authenticateToken) globally,
 // and request submission/voting are public (no auth required)
 app.use('/api/auth', authRoutes);
+app.use('/api/auth/2fa', twofaRoutes);
 app.use('/api', requestRoutes);
 app.use('/api', messageRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/songs', songRoutes);
+app.use('/api/templates', templateRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
