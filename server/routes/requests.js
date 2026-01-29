@@ -462,11 +462,19 @@ router.post('/events/:eventId/requests/:requestId/vote', (req, res) => {
       }
     }
 
-    // Check if already voted
+    // Toggle vote: if already voted, remove (unvote); otherwise add
     const existingVote = db.prepare('SELECT * FROM votes WHERE request_id = ? AND user_id = ?')
       .get(req.params.requestId, userId);
     if (existingVote) {
-      return res.status(409).json({ error: 'Already voted for this request' });
+      // Unvote - remove existing vote
+      db.prepare('DELETE FROM votes WHERE request_id = ? AND user_id = ?')
+        .run(req.params.requestId, userId);
+      db.prepare('UPDATE requests SET vote_count = MAX(vote_count - 1, 0), updated_at = datetime(\'now\') WHERE id = ?')
+        .run(req.params.requestId);
+      const updated = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.requestId);
+      const formatted = formatRequest(updated);
+      formatted.unvoted = true;
+      return res.json(formatted);
     }
 
     const voteId = uuidv4();
