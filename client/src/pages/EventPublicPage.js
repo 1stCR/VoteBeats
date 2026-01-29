@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { Music, Search, Send, ThumbsUp, ListMusic, User, Link2, Flame } from 'lucide-react';
+import { Music, Search, Send, ThumbsUp, ListMusic, User, Link2, Flame, Clock } from 'lucide-react';
 import { api } from '../config/api';
 
 function generateUUID() {
@@ -41,6 +41,57 @@ export default function EventPublicPage() {
   const [message, setMessage] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('all');
+  const [votingCountdown, setVotingCountdown] = useState(null);
+
+  // Countdown timer for voting close
+  useEffect(() => {
+    const settings = event?.settings;
+    if (!settings) return;
+
+    // If voting is manually closed
+    if (settings.votingClosed) {
+      setVotingCountdown({ closed: true, text: 'Voting Closed' });
+      return;
+    }
+
+    // If scheduled close mode with a close time
+    if (settings.votingCloseMode === 'scheduled' && settings.votingCloseTime) {
+      const updateCountdown = () => {
+        const now = Date.now();
+        const closeTime = new Date(settings.votingCloseTime).getTime();
+        const diff = closeTime - now;
+
+        if (diff <= 0) {
+          setVotingCountdown({ closed: true, text: 'Voting Closed' });
+          return;
+        }
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+        let text;
+        if (days > 0) {
+          text = days + 'd ' + hours + 'h ' + minutes + 'm';
+        } else if (hours > 0) {
+          text = hours + 'h ' + minutes + 'm ' + seconds + 's';
+        } else {
+          text = minutes + 'm ' + seconds + 's';
+        }
+
+        const urgency = diff <= 3600000 ? 'urgent' : diff <= 86400000 ? 'warning' : 'normal';
+        setVotingCountdown({ closed: false, text, urgency, diff });
+      };
+
+      updateCountdown();
+      const interval = setInterval(updateCountdown, 1000);
+      return () => clearInterval(interval);
+    }
+
+    // No countdown needed (manual mode, not closed)
+    setVotingCountdown(null);
+  }, [event?.settings?.votingClosed, event?.settings?.votingCloseMode, event?.settings?.votingCloseTime]);
 
   const attendeeId = getAttendeeId();
 
@@ -68,9 +119,10 @@ export default function EventPublicPage() {
     if (!eventId || loading) return;
     const pollInterval = setInterval(() => {
       fetchRequests();
+      fetchEvent();
     }, 3000); // Poll every 3 seconds for real-time vote updates
     return () => clearInterval(pollInterval);
-  }, [eventId, loading, fetchRequests]);
+  }, [eventId, loading, fetchRequests, fetchEvent]);
 
   // Resolve code word to linked attendee ID
   useEffect(() => {
@@ -236,6 +288,20 @@ export default function EventPublicPage() {
                   </div>
                 )}
 
+          {votingCountdown && (
+            <div id="voting-countdown-banner" className={`mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
+              votingCountdown.closed
+                ? 'bg-red-500/20 text-red-100'
+                : votingCountdown.urgency === 'urgent'
+                ? 'bg-orange-500/20 text-orange-100 animate-pulse'
+                : votingCountdown.urgency === 'warning'
+                ? 'bg-yellow-500/20 text-yellow-100'
+                : 'bg-white/20 text-white'
+            }`}>
+              <Clock className="w-4 h-4" />
+              {votingCountdown.closed ? 'Voting Closed' : `Voting closes in ${votingCountdown.text}`}
+            </div>
+          )}
           {event.location && <p className="text-sm opacity-80 mt-1">{event.location}</p>}
         </div>
       </header>
