@@ -1,28 +1,27 @@
 ===== VoteBeats Development Progress =====
 
-=== Session: 2026-01-29 (Session 13) ===
+=== Session: 2026-01-29 (Session 14) ===
 Status: 51/51 features passing (100%)
 
 REGRESSION TESTING:
-- Feature #49 (Empty state shows when no events exist): PASSED
-  - Registered new DJ (regtest_s13@test.com / RegTestDJ_S13)
-  - Navigated to /dashboard
-  - Empty state displayed: "No events yet" heading with helpful message
-  - "Create Your First Event" CTA button visible
-  - Stats show 0 Events, 0 Total Requests, 0 Songs Played
+- Feature #10 (Failed login shows generic error - no info leakage): PASSED
+  - Entered non-existent email (nonexistent_user@fake.com) with wrong password
+  - Error: "Invalid email or password" (generic, no info leakage)
+  - Entered existing email (regtest_s14@test.com) with wrong password
+  - Same error: "Invalid email or password" (no distinction between bad email vs bad password)
 
-- Feature #34 (Event URL /e/{eventId} loads correct event): PASSED
-  - Created event "REG_TEST_S13_EVENT" with date 2026-04-15, location Test Venue S13
-  - Navigated to /e/{eventId}
-  - Event name "REG_TEST_S13_EVENT" displayed correctly
-  - Location "Test Venue S13" shown
-  - Attendee interface loaded with Request Song, Queue, My Requests tabs
+- Feature #16 (Security rules block unauthorized access): PASSED
+  - Unauthenticated GET /api/events -> "Authentication required" (blocked)
+  - Unauthenticated POST /api/events -> "Authentication required" (blocked)
+  - Unauthenticated PUT /api/events/:id/requests/:id/status -> "Authentication required" (blocked)
+  - Direct navigation to /events/:id/manage while logged out -> redirected to /login
 
-- Feature #23 (DJ sidebar navigation - Messages link): PASSED
-  - Navigated to event management page
-  - Clicked Messages link in sidebar
-  - URL changed to /events/:id/manage/messages
-  - Messages content loaded: heading, compose box, empty state
+- Feature #30 (Back button works after navigation): PASSED
+  - Registered new DJ (regtest_s14@test.com / TestPass14A)
+  - Created event "REGTEST_S14_EVENT" (date 2026-05-01, location Test Venue S14)
+  - Navigated: dashboard -> manage -> queue
+  - Back button: queue -> manage (correct)
+  - Back button: manage -> dashboard (correct, event list loaded)
 
 CONSOLE ERRORS: Zero JavaScript errors detected.
 
@@ -44,6 +43,16 @@ NEXT SESSION:
 - No pending features to implement
 - App is in working state with clean code
 
+=== Session: 2026-01-29 (Session 13) ===
+Status: 51/51 features passing (100%)
+
+REGRESSION TESTING:
+- Feature #49 (Empty state shows when no events exist): PASSED
+- Feature #34 (Event URL /e/{eventId} loads correct event): PASSED
+- Feature #23 (DJ sidebar navigation - Messages link): PASSED
+
+ALL REGRESSION TESTS PASSED. No regressions found.
+
 === Session: 2026-01-29 (Session 12) ===
 Status: 51/51 features passing (100%)
 
@@ -54,26 +63,6 @@ REGRESSION TESTING:
 
 ALL REGRESSION TESTS PASSED. No regressions found.
 
-=== Session: 2026-01-29 (Session 11) ===
-Status: 51/51 features passing (100%)
-
-REGRESSION TESTING:
-- Feature #49 (Empty state shows when no events exist): PASSED
-- Feature #35 (DJ dashboard event list shows all DJ events): PASSED
-- Feature #33 (Attendee event page navigation - My Requests tab): PASSED
-
-ALL REGRESSION TESTS PASSED. No regressions found.
-
-=== Session: 2026-01-29 (Session 10) ===
-Status: 51/51 features passing (100%)
-
-REGRESSION TESTING:
-- Feature #9 (Password reset flow works securely): PASSED
-- Feature #44 (Edit event and verify changes persist): PASSED
-- Feature #14 (Request limit enforcement per attendee): PASSED
-
-ALL REGRESSION TESTS PASSED. No regressions found.
-
-=== Previous Sessions (2026-01-29, Sessions 1-9) ===
+=== Previous Sessions (2026-01-29, Sessions 1-11) ===
 All sessions completed with 51/51 features passing (100%).
 Regression tests passed in every session. No regressions found across all sessions.
