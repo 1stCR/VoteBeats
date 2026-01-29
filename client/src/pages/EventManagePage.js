@@ -37,6 +37,8 @@ export default function EventManagePage() {
   const [queueSort, setQueueSort] = useState('votes'); // votes, time, title, artist
   const [queueSearch, setQueueSearch] = useState(''); // search within queue
   const [showShortcuts, setShowShortcuts] = useState(false); // keyboard shortcuts help
+  const [songEndingAlert, setSongEndingAlert] = useState(null); // { songId, nextSong, remainingSeconds }
+  const [dismissedAlerts, setDismissedAlerts] = useState(new Set()); // set of songIds already dismissed
 
   // Helper to format duration from milliseconds to mm:ss
   const formatDuration = (ms) => {
@@ -97,6 +99,48 @@ export default function EventManagePage() {
     }
     loadAllEvents();
   }, []);
+
+  // Song ending alert: monitor now-playing song and alert 30s before it ends
+  useEffect(() => {
+    const npReq = requests.find(r => r.status === 'nowPlaying');
+    if (!npReq || !npReq.song?.durationMs || !npReq.updatedAt) {
+      setSongEndingAlert(null);
+      return;
+    }
+
+    const songId = npReq.id;
+    const durationMs = npReq.song.durationMs;
+    // Server stores datetime('now') as UTC without Z suffix; ensure UTC parsing
+    const updatedAtStr = npReq.updatedAt || '';
+    const startTime = new Date(updatedAtStr.includes('T') ? updatedAtStr : updatedAtStr.replace(' ', 'T') + 'Z').getTime();
+
+    const checkRemaining = () => {
+      const elapsed = Date.now() - startTime;
+      const remainingMs = durationMs - elapsed;
+      const remainingSec = Math.max(0, Math.floor(remainingMs / 1000));
+
+      if (remainingSec <= 30 && remainingSec > 0 && !dismissedAlerts.has(songId)) {
+        // Find next song in queue (sorted by votes, no search filter)
+        const queued = requests.filter(r => r.status === 'queued');
+        const sorted = [...queued].sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0));
+        const nextSong = sorted[0] || null;
+
+        setSongEndingAlert({
+          songId,
+          currentSong: npReq.song,
+          nextSong: nextSong ? nextSong.song : null,
+          nextSongSpotifyUrl: nextSong ? getSpotifySearchUrl(nextSong.song) : null,
+          remainingSeconds: remainingSec,
+        });
+      } else if (remainingSec <= 0 || dismissedAlerts.has(songId)) {
+        setSongEndingAlert(prev => prev?.songId === songId ? null : prev);
+      }
+    };
+
+    checkRemaining();
+    const interval = setInterval(checkRemaining, 1000);
+    return () => clearInterval(interval);
+  }, [requests, dismissedAlerts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleDelete() {
     setDeleting(true);
@@ -1566,6 +1610,66 @@ export default function EventManagePage() {
           )}
         </main>
       </div>
+
+      {/* Song Ending Alert */}
+      {songEndingAlert && (
+        <div className="fixed bottom-4 right-4 z-50 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-orange-200 dark:border-orange-800 overflow-hidden animate-pulse-once" data-song-ending-alert>
+          <div className="bg-orange-500 px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-white">
+              <Clock className="w-4 h-4" />
+              <span className="text-sm font-bold">Song ending in {songEndingAlert.remainingSeconds}s</span>
+            </div>
+            <button
+              onClick={() => {
+                setDismissedAlerts(prev => new Set(prev).add(songEndingAlert.songId));
+                setSongEndingAlert(null);
+              }}
+              className="text-white/80 hover:text-white transition-colors"
+              data-dismiss-alert
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="p-4">
+            {songEndingAlert.nextSong ? (
+              <>
+                <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide font-semibold mb-2">Up Next</p>
+                <div className="flex items-center gap-3">
+                  {songEndingAlert.nextSong.albumArtUrl ? (
+                    <img src={songEndingAlert.nextSong.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                      <Music className="w-5 h-5 text-slate-400" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{songEndingAlert.nextSong.title}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                      {songEndingAlert.nextSong.artist}
+                      {songEndingAlert.nextSong.durationMs && (
+                        <span className="ml-1">({formatDuration(songEndingAlert.nextSong.durationMs)})</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                {songEndingAlert.nextSongSpotifyUrl && (
+                  <a
+                    href={songEndingAlert.nextSongSpotifyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 flex items-center justify-center gap-2 w-full px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Open in Spotify
+                  </a>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-slate-500 dark:text-slate-400">No songs queued up next</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Dialog */}
       {showDeleteDialog && (
