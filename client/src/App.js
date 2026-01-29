@@ -13,6 +13,7 @@ import EventManagePage from './pages/EventManagePage';
 import NotFoundPage from './pages/NotFoundPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import EventPublicPage from './pages/EventPublicPage';
+import SettingsPage from './pages/SettingsPage';
 
 export default function App() {
   return (
@@ -50,7 +51,7 @@ export default function App() {
           path="/settings"
           element={
             <ProtectedRoute>
-              <DashboardPage />
+              <SettingsPage />
             </ProtectedRoute>
           }
         />

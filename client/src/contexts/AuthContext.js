@@ -75,13 +75,19 @@ export function AuthProvider({ children }) {
     return { message: 'If an account exists with that email, a reset link has been sent.' };
   }, []);
 
+  const updateUser = useCallback((updatedUser) => {
+    setCurrentUser(updatedUser);
+    localStorage.setItem('votebeats_user', JSON.stringify(updatedUser));
+  }, []);
+
   const value = {
     currentUser,
     loading,
     login,
     register,
     logout,
-    resetPassword
+    resetPassword,
+    updateUser
   };
 
   return (
