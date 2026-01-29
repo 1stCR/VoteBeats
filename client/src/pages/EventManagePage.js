@@ -609,6 +609,17 @@ export default function EventManagePage() {
                     : percentage >= 50 ? 'Getting there'
                     : 'Need more songs';
 
+                  // Calculate projected end time
+                  let projectedEnd = null;
+                  if (event?.startTime && totalQueueMs > 0) {
+                    const [sh, sm] = event.startTime.split(':').map(Number);
+                    const startMinutes = sh * 60 + sm;
+                    const endMinutes = startMinutes + Math.ceil(totalQueueMs / 60000);
+                    const endH = Math.floor(endMinutes / 60) % 24;
+                    const endM = endMinutes % 60;
+                    projectedEnd = `${endH % 12 || 12}:${String(endM).padStart(2, '0')} ${endH >= 12 ? 'PM' : 'AM'}`;
+                  }
+
                   return (
                     <div className="mb-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600">
                       <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1.5">
@@ -625,12 +636,20 @@ export default function EventManagePage() {
                           style={{ width: percentage !== null ? `${percentage}%` : '0%' }}
                         />
                       </div>
-                      {eventDurationMin && (
-                        <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                          <span>0 min</span>
-                          <span>{eventDurationMin} min event</span>
-                        </div>
-                      )}
+                      <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                        {eventDurationMin ? (
+                          <>
+                            <span>0 min</span>
+                            {projectedEnd && <span>Projected end: {projectedEnd}</span>}
+                            <span>{eventDurationMin} min event</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>{activeRequests.filter(r => r.song?.durationMs).length} songs with duration data</span>
+                            {projectedEnd && <span>Projected end: {projectedEnd}</span>}
+                          </>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}
