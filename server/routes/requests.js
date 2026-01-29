@@ -195,6 +195,25 @@ router.get('/events/:eventId/requests', (req, res) => {
   try {
     const { eventId } = req.params;
     const { userId } = req.query; // Optional: attendee user ID for vote tracking
+
+    // Optional auth check: determine if caller is the event's DJ
+    let isDJ = false;
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const { JWT_SECRET } = require('../middleware/auth');
+        const user = jwt.verify(token, JWT_SECRET);
+        const event = db.prepare('SELECT dj_id FROM events WHERE id = ?').get(eventId);
+        if (event && user.id === event.dj_id) {
+          isDJ = true;
+        }
+      } catch (e) {
+        // Invalid token - treat as public access
+      }
+    }
+
     // Sort: manually ordered songs first (by manual_order), then auto-sort by vote count (highest first)
     const requests = db.prepare('SELECT * FROM requests WHERE event_id = ? ORDER BY CASE WHEN manual_order IS NOT NULL THEN 0 ELSE 1 END, manual_order ASC, vote_count DESC, created_at ASC').all(eventId);
 
@@ -224,6 +243,11 @@ router.get('/events/:eventId/requests', (req, res) => {
       const formatted = formatRequest(r);
       formatted.recentVotes = recentVotes;
       formatted.trending = recentVotes >= 3;
+
+      // Strip private DJ notes from public (non-DJ) responses
+      if (!isDJ) {
+        delete formatted.djNotes;
+      }
 
       // Social proof: voter nicknames
       const totalVoters = voterCountStmt.get(r.id)?.count || 0;
@@ -374,6 +398,34 @@ router.get('/events/:eventId/requests/:requestId/voters', authenticateToken, (re
     });
   } catch (err) {
     console.error('Get voters error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/events/:eventId/requests/:requestId/notes - Update DJ private notes (DJ only)
+router.put('/events/:eventId/requests/:requestId/notes', authenticateToken, (req, res) => {
+  try {
+    const request = db.prepare('SELECT r.*, e.dj_id FROM requests r JOIN events e ON r.event_id = e.id WHERE r.id = ? AND r.event_id = ?')
+      .get(req.params.requestId, req.params.eventId);
+
+    if (!request) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    if (request.dj_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const { notes } = req.body;
+    const cleanNotes = (notes || '').trim();
+
+    db.prepare('UPDATE requests SET dj_notes = ?, updated_at = datetime(\'now\') WHERE id = ?')
+      .run(cleanNotes || null, req.params.requestId);
+
+    const updated = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.requestId);
+    res.json(formatRequest(updated));
+  } catch (err) {
+    console.error('Update DJ notes error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

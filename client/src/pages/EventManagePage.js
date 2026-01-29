@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
-import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users } from 'lucide-react';
+import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users, StickyNote, Save } from 'lucide-react';
 import { api } from '../config/api';
 import { useTheme } from '../contexts/ThemeContext';
 import EventSettingsForm from '../components/EventSettingsForm';
@@ -29,6 +29,8 @@ export default function EventManagePage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [expandedVoters, setExpandedVoters] = useState({});
   const [voterData, setVoterData] = useState({});
+  const [editingNotes, setEditingNotes] = useState(null); // requestId being edited
+  const [noteTexts, setNoteTexts] = useState({}); // { requestId: text }
 
   // Helper to format duration from milliseconds to mm:ss
   const formatDuration = (ms) => {
@@ -202,6 +204,28 @@ export default function EventManagePage() {
       setExpandedVoters(prev => ({ ...prev, [requestId]: true }));
     } catch (err) {
       console.error('Failed to load voters:', err);
+    }
+  }
+
+  function toggleNotes(requestId, currentNotes) {
+    if (editingNotes === requestId) {
+      setEditingNotes(null);
+      return;
+    }
+    setNoteTexts(prev => ({ ...prev, [requestId]: currentNotes || '' }));
+    setEditingNotes(requestId);
+  }
+
+  async function handleSaveNotes(requestId) {
+    try {
+      await api.updateRequestNotes(id, requestId, noteTexts[requestId] || '');
+      // Update local state to reflect saved notes
+      setRequests(prev => prev.map(r =>
+        r.id === requestId ? { ...r, djNotes: noteTexts[requestId] || null } : r
+      ));
+      setEditingNotes(null);
+    } catch (err) {
+      console.error('Failed to save notes:', err);
     }
   }
 
@@ -600,6 +624,13 @@ export default function EventManagePage() {
                                 </button>
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                   <button
+                                    onClick={() => toggleNotes(request.id, request.djNotes)}
+                                    className={`p-1.5 rounded transition-colors ${request.djNotes ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-600'}`}
+                                    title={request.djNotes ? 'Edit note' : 'Add note'}
+                                  >
+                                    <StickyNote className="w-4 h-4" />
+                                  </button>
+                                  <button
                                     onClick={() => handleStatusChange(request.id, 'queued')}
                                     className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
                                     title="Approve"
@@ -625,6 +656,38 @@ export default function EventManagePage() {
                                       </li>
                                     ))}
                                   </ul>
+                                </div>
+                              )}
+                              {/* DJ Notes display/edit */}
+                              {(request.djNotes && editingNotes !== request.id) && (
+                                <div className="ml-8 mt-1 mb-1 px-2 py-1.5 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300 cursor-pointer" onClick={() => toggleNotes(request.id, request.djNotes)}>
+                                  <span className="font-medium">DJ Note:</span> {request.djNotes}
+                                </div>
+                              )}
+                              {editingNotes === request.id && (
+                                <div className="ml-8 mt-1 mb-2 flex gap-2 items-start">
+                                  <input
+                                    type="text"
+                                    value={noteTexts[request.id] || ''}
+                                    onChange={(e) => setNoteTexts(prev => ({ ...prev, [request.id]: e.target.value }))}
+                                    placeholder="Add a private note..."
+                                    className="flex-1 px-2 py-1.5 text-xs border border-amber-300 dark:border-amber-700 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-1 focus:ring-amber-400 outline-none"
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSaveNotes(request.id)}
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => handleSaveNotes(request.id)}
+                                    className="px-2 py-1.5 text-xs font-medium bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors flex items-center gap-1"
+                                  >
+                                    <Save className="w-3 h-3" />
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingNotes(null)}
+                                    className="px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                                  >
+                                    Cancel
+                                  </button>
                                 </div>
                               )}
                             </div>
@@ -684,57 +747,95 @@ export default function EventManagePage() {
                         </h4>
                         <div className="space-y-2">
                           {queuedRequests.map(request => (
-                            <div
-                              key={request.id}
-                              className="flex items-center gap-3 p-3 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600"
-                            >
-                              {request.song?.albumArtUrl ? (
-                                <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
-                              ) : (
-                                <div className="w-10 h-10 rounded flex-shrink-0 bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
-                                  <Music className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+                            <div key={request.id}>
+                              <div className="flex items-center gap-3 p-3 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600">
+                                {request.song?.albumArtUrl ? (
+                                  <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                                ) : (
+                                  <div className="w-10 h-10 rounded flex-shrink-0 bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
+                                    <Music className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-slate-900 dark:text-white truncate">
+                                    {request.song?.title}
+                                    {request.song?.explicitFlag && event?.settings?.warnExplicit !== false && (
+                                      <span className="inline-flex items-center ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded" title="Explicit content">E</span>
+                                    )}
+                                  </p>
+                                  <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
+                                    {request.song?.artist}
+                                    {request.song?.durationMs && (
+                                      <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">({formatDuration(request.song.durationMs)})</span>
+                                    )}
+                                  </p>
+                                  {request.requestedBy?.nickname && (
+                                    <p className="text-xs text-primary-500 dark:text-primary-400 truncate">🎵 {request.requestedBy.nickname}</p>
+                                  )}
+                                  {request.message && (
+                                    <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5" title={request.message}>
+                                      💬 {request.message}
+                                    </p>
+                                  )}
+                                </div>
+                                <span className="text-sm text-slate-500">{request.voteCount || 0} votes</span>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <button
+                                    onClick={() => toggleNotes(request.id, request.djNotes)}
+                                    className={`p-1.5 rounded transition-colors ${request.djNotes ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-600'}`}
+                                    title={request.djNotes ? 'Edit note' : 'Add note'}
+                                  >
+                                    <StickyNote className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleStatusChange(request.id, 'nowPlaying')}
+                                    className="px-3 py-1.5 text-xs font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-1"
+                                    title="Play Now"
+                                  >
+                                    <Play className="w-3 h-3" />
+                                    Play
+                                  </button>
+                                  <button
+                                    onClick={() => handleStatusChange(request.id, 'rejected')}
+                                    className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                    title="Remove"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                              {/* DJ Notes display/edit */}
+                              {(request.djNotes && editingNotes !== request.id) && (
+                                <div className="ml-8 mt-1 mb-1 px-2 py-1.5 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300 cursor-pointer" onClick={() => toggleNotes(request.id, request.djNotes)}>
+                                  <span className="font-medium">DJ Note:</span> {request.djNotes}
                                 </div>
                               )}
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-slate-900 dark:text-white truncate">
-                                  {request.song?.title}
-                                  {request.song?.explicitFlag && event?.settings?.warnExplicit !== false && (
-                                    <span className="inline-flex items-center ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded" title="Explicit content">E</span>
-                                  )}
-                                </p>
-                                <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
-                                  {request.song?.artist}
-                                  {request.song?.durationMs && (
-                                    <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">({formatDuration(request.song.durationMs)})</span>
-                                  )}
-                                </p>
-                                {request.requestedBy?.nickname && (
-                                  <p className="text-xs text-primary-500 dark:text-primary-400 truncate">🎵 {request.requestedBy.nickname}</p>
-                                )}
-                                {request.message && (
-                                  <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5" title={request.message}>
-                                    💬 {request.message}
-                                  </p>
-                                )}
-                              </div>
-                              <span className="text-sm text-slate-500">{request.voteCount || 0} votes</span>
-                              <div className="flex items-center gap-1 flex-shrink-0">
-                                <button
-                                  onClick={() => handleStatusChange(request.id, 'nowPlaying')}
-                                  className="px-3 py-1.5 text-xs font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-1"
-                                  title="Play Now"
-                                >
-                                  <Play className="w-3 h-3" />
-                                  Play
-                                </button>
-                                <button
-                                  onClick={() => handleStatusChange(request.id, 'rejected')}
-                                  className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                  title="Remove"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
+                              {editingNotes === request.id && (
+                                <div className="ml-8 mt-1 mb-2 flex gap-2 items-start">
+                                  <input
+                                    type="text"
+                                    value={noteTexts[request.id] || ''}
+                                    onChange={(e) => setNoteTexts(prev => ({ ...prev, [request.id]: e.target.value }))}
+                                    placeholder="Add a private note..."
+                                    className="flex-1 px-2 py-1.5 text-xs border border-amber-300 dark:border-amber-700 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-1 focus:ring-amber-400 outline-none"
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSaveNotes(request.id)}
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => handleSaveNotes(request.id)}
+                                    className="px-2 py-1.5 text-xs font-medium bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors flex items-center gap-1"
+                                  >
+                                    <Save className="w-3 h-3" />
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingNotes(null)}
+                                    className="px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -895,6 +996,13 @@ export default function EventManagePage() {
                         </button>
                         <div className="flex items-center gap-1 flex-shrink-0">
                           <button
+                            onClick={() => toggleNotes(request.id, request.djNotes)}
+                            className={`p-1.5 rounded transition-colors ${request.djNotes ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-600'}`}
+                            title={request.djNotes ? 'Edit note' : 'Add note'}
+                          >
+                            <StickyNote className="w-4 h-4" />
+                          </button>
+                          <button
                             onClick={() => handleStatusChange(request.id, 'queued')}
                             className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
                             title="Approve"
@@ -920,6 +1028,38 @@ export default function EventManagePage() {
                               </li>
                             ))}
                           </ul>
+                        </div>
+                      )}
+                      {/* DJ Notes display/edit */}
+                      {(request.djNotes && editingNotes !== request.id) && (
+                        <div className="ml-8 mt-1 mb-1 px-2 py-1.5 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300 cursor-pointer" onClick={() => toggleNotes(request.id, request.djNotes)}>
+                          <span className="font-medium">DJ Note:</span> {request.djNotes}
+                        </div>
+                      )}
+                      {editingNotes === request.id && (
+                        <div className="ml-8 mt-1 mb-2 flex gap-2 items-start">
+                          <input
+                            type="text"
+                            value={noteTexts[request.id] || ''}
+                            onChange={(e) => setNoteTexts(prev => ({ ...prev, [request.id]: e.target.value }))}
+                            placeholder="Add a private note..."
+                            className="flex-1 px-2 py-1.5 text-xs border border-amber-300 dark:border-amber-700 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-1 focus:ring-amber-400 outline-none"
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveNotes(request.id)}
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleSaveNotes(request.id)}
+                            className="px-2 py-1.5 text-xs font-medium bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors flex items-center gap-1"
+                          >
+                            <Save className="w-3 h-3" />
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingNotes(null)}
+                            className="px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                          >
+                            Cancel
+                          </button>
                         </div>
                       )}
                     </div>

@@ -180,6 +180,12 @@ export const api = {
   getRequestVoters: (eventId, requestId) =>
     apiRequest(`/api/events/${eventId}/requests/${requestId}/voters`),
 
+  updateRequestNotes: (eventId, requestId, notes) =>
+    apiRequest(`/api/events/${eventId}/requests/${requestId}/notes`, {
+      method: 'PUT',
+      body: JSON.stringify({ notes }),
+    }),
+
   // Songs
   searchSongs: (query) =>
     apiRequest(`/api/songs/search?q=${encodeURIComponent(query)}`),
