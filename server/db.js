@@ -93,6 +93,8 @@ try { db.exec('ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0'); } 
 try { db.exec("ALTER TABLE users ADD COLUMN notification_preferences TEXT DEFAULT '{}'"); } catch(e) { /* column exists */ }
 try { db.exec("ALTER TABLE users ADD COLUMN default_event_settings TEXT DEFAULT '{}'"); } catch(e) { /* column exists */ }
 
+try { db.exec('ALTER TABLE requests ADD COLUMN song_genre TEXT'); } catch(e) { /* column exists */ }
+
 // Create settings_templates table
 db.exec(`
   CREATE TABLE IF NOT EXISTS settings_templates (

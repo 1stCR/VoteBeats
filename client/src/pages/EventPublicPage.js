@@ -40,6 +40,7 @@ export default function EventPublicPage() {
   const [codeWordLinked, setCodeWordLinked] = useState(!!localStorage.getItem('votebeats_codeword'));
   const [message, setMessage] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
+  const [selectedGenre, setSelectedGenre] = useState('all');
 
   const attendeeId = getAttendeeId();
 
@@ -156,6 +157,7 @@ export default function EventPublicPage() {
         requestedBy: attendeeId,
         nickname: nickname.trim() || null,
         message: message.trim() || null,
+        genre: song.genre || song.primaryGenreName || null,
       });
       setSubmitSuccess(song.trackName || song.title);
       setSearchQuery('');
@@ -502,11 +504,31 @@ export default function EventPublicPage() {
                   <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
                     Live Queue ({requests.filter(r => r.status === 'queued' || r.status === 'pending').length})
                   </h2>
-                  {requests.filter(r => r.status === 'queued' || r.status === 'pending').length === 0 ? (
-                    <p className="text-sm text-slate-500">No songs in the queue yet. Be the first to request!</p>
+                  {/* Genre Filter */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Filter by Genre
+                    </label>
+                    <select
+                      value={selectedGenre}
+                      onChange={(e) => setSelectedGenre(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                    >
+                      <option value="all">All Genres</option>
+                      {Array.from(new Set(
+                        requests
+                          .filter(r => (r.status === 'queued' || r.status === 'pending') && r.song?.genre)
+                          .map(r => r.song.genre)
+                      )).sort().map(genre => (
+                        <option key={genre} value={genre}>{genre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {requests.filter(r => (r.status === 'queued' || r.status === 'pending') && (selectedGenre === 'all' || r.song?.genre === selectedGenre)).length === 0 ? (
+                    <p className="text-sm text-slate-500">{selectedGenre === 'all' ? 'No songs in the queue yet. Be the first to request!' : `No ${selectedGenre} songs in the queue.`}</p>
                   ) : (
                     <div className="space-y-2">
-                      {requests.filter(r => r.status === 'queued' || r.status === 'pending')
+                      {requests.filter(r => (r.status === 'queued' || r.status === 'pending') && (selectedGenre === 'all' || r.song?.genre === selectedGenre))
                         .sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0))
                         .map((req, index) => (
                         <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg" data-rank={index + 1}>

@@ -56,7 +56,8 @@ router.get('/search', (req, res) => {
           albumArtUrl: track.artworkUrl100 ? track.artworkUrl100.replace('100x100', '300x300') : null,
           durationMs: track.trackTimeMillis,
           explicit: track.trackExplicitness === 'explicit',
-          previewUrl: track.previewUrl
+          previewUrl: track.previewUrl,
+          genre: track.primaryGenreName || null
         }));
         const response_data = { results, resultCount: results.length };
         setCachedResult(query, response_data);

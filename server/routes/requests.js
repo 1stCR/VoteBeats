@@ -36,7 +36,7 @@ router.get('/events/:eventId/public', (req, res) => {
 router.post('/events/:eventId/requests', (req, res) => {
   try {
     const { eventId } = req.params;
-    const { songTitle, artistName, albumArtUrl, durationMs, explicitFlag, itunesTrackId, requestedBy, nickname, message } = req.body;
+    const { songTitle, artistName, albumArtUrl, durationMs, explicitFlag, itunesTrackId, requestedBy, nickname, message, genre } = req.body;
 
     if (!songTitle || !artistName || !requestedBy) {
       return res.status(400).json({ error: 'Song title, artist name, and requester ID are required' });
@@ -178,9 +178,9 @@ router.post('/events/:eventId/requests', (req, res) => {
     // Determine initial status: 'pending' if requireApproval, 'queued' otherwise
     const initialStatus = settings.requireApproval ? 'pending' : 'queued';
 
-    db.prepare(`INSERT INTO requests (id, event_id, song_title, artist_name, album_art_url, duration_ms, explicit_flag, itunes_track_id, requested_by, nickname, message, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(id, eventId, cleanSongTitle, cleanArtistName, albumArtUrl || null, durationMs || null, explicitFlag ? 1 : 0, itunesTrackId || null, cleanRequestedBy, filteredNickname, filteredMessage, initialStatus);
+    db.prepare(`INSERT INTO requests (id, event_id, song_title, artist_name, album_art_url, duration_ms, explicit_flag, itunes_track_id, requested_by, nickname, message, status, song_genre)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(id, eventId, cleanSongTitle, cleanArtistName, albumArtUrl || null, durationMs || null, explicitFlag ? 1 : 0, itunesTrackId || null, cleanRequestedBy, filteredNickname, filteredMessage, initialStatus, genre || null);
 
     const request = db.prepare('SELECT * FROM requests WHERE id = ?').get(id);
     res.status(201).json(formatRequest(request));
@@ -589,7 +589,8 @@ function formatRequest(req) {
       albumArtUrl: req.album_art_url,
       durationMs: req.duration_ms,
       explicitFlag: !!req.explicit_flag,
-      itunesTrackId: req.itunes_track_id
+      itunesTrackId: req.itunes_track_id,
+      genre: req.song_genre
     },
     requestedBy: {
       userId: req.requested_by,
