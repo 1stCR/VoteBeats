@@ -243,6 +243,28 @@ export default function EventPublicPage() {
     return idx >= 0 ? idx + 1 : null;
   };
 
+  // Variety prompt: suggest other genres when queue is homogeneous
+  const genrePrompt = (() => {
+    const queueSongs = requests.filter(r => r.status === 'queued' || r.status === 'pending');
+    const genreSongs = queueSongs.filter(r => r.song?.genre);
+    if (genreSongs.length < 3) return null; // Need at least 3 genre-tagged songs
+    const genreCounts = {};
+    genreSongs.forEach(r => {
+      genreCounts[r.song.genre] = (genreCounts[r.song.genre] || 0) + 1;
+    });
+    const sorted = Object.entries(genreCounts).sort((a, b) => b[1] - a[1]);
+    const topGenre = sorted[0][0];
+    const topCount = sorted[0][1];
+    const ratio = topCount / genreSongs.length;
+    if (ratio >= 0.6) {
+      const otherGenres = ['Rock', 'Hip-Hop', 'R&B', 'Country', 'Electronic', 'Jazz', 'Latin', 'Classical']
+        .filter(g => g !== topGenre);
+      const suggestions = otherGenres.slice(0, 3).join(', ');
+      return { topGenre, ratio: Math.round(ratio * 100), suggestions };
+    }
+    return null;
+  })();
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
@@ -345,6 +367,13 @@ export default function EventPublicPage() {
         <div className="bg-white dark:bg-slate-800 rounded-b-xl shadow-sm border border-t-0 border-slate-200 dark:border-slate-700 p-4 mb-8">
           {activeTab === 'request' && (
             <div>
+              {genrePrompt && (
+                <div id="variety-prompt" className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    <span className="font-medium">Mix it up!</span> The queue is {genrePrompt.ratio}% {genrePrompt.topGenre}. Try requesting some {genrePrompt.suggestions}!
+                  </p>
+                </div>
+              )}
               <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Request a Song</h2>
 
               {submitSuccess && (
