@@ -31,6 +31,7 @@ export default function EventManagePage() {
   const [voterData, setVoterData] = useState({});
   const [editingNotes, setEditingNotes] = useState(null); // requestId being edited
   const [noteTexts, setNoteTexts] = useState({}); // { requestId: text }
+  const [queueFilter, setQueueFilter] = useState('all'); // all, pending, queued, nowPlaying, played, rejected
 
   // Helper to format duration from milliseconds to mm:ss
   const formatDuration = (ms) => {
@@ -552,12 +553,38 @@ export default function EventManagePage() {
                   )}
                 </div>
 
+                {/* Status filter bar */}
+                {requests.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {[
+                      { key: 'all', label: 'All', count: requests.length },
+                      { key: 'pending', label: 'Pending', count: pendingRequests.length },
+                      { key: 'queued', label: 'Queued', count: queuedRequests.length },
+                      { key: 'nowPlaying', label: 'Now Playing', count: nowPlayingRequest ? 1 : 0 },
+                      { key: 'played', label: 'Played', count: playedRequests.length },
+                      { key: 'rejected', label: 'Rejected', count: rejectedRequests.length },
+                    ].map(f => (
+                      <button
+                        key={f.key}
+                        onClick={() => setQueueFilter(f.key)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                          queueFilter === f.key
+                            ? 'bg-primary-500 text-white'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                        }`}
+                      >
+                        {f.label} ({f.count})
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {requests.length === 0 ? (
                   <p className="text-slate-500 dark:text-slate-400 text-center py-8">No song requests yet. Share the event link with your audience!</p>
                 ) : (
                   <div className="space-y-6">
                     {/* Pending requests with checkboxes */}
-                    {pendingRequests.length > 0 && (
+                    {pendingRequests.length > 0 && (queueFilter === 'all' || queueFilter === 'pending') && (
                       <div>
                         <div className="flex items-center gap-3 mb-3">
                           <button onClick={toggleSelectAll} className="text-slate-400 hover:text-primary-500 transition-colors">
@@ -712,7 +739,7 @@ export default function EventManagePage() {
                     )}
 
                     {/* Now Playing */}
-                    {nowPlayingRequest && (
+                    {nowPlayingRequest && (queueFilter === 'all' || queueFilter === 'nowPlaying') && (
                       <div className="mb-4">
                         <h4 className="text-sm font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide mb-3 flex items-center gap-2">
                           <Radio className="w-4 h-4 animate-pulse" />
@@ -764,7 +791,7 @@ export default function EventManagePage() {
                     )}
 
                     {/* Queued songs with Play button */}
-                    {queuedRequests.length > 0 && (
+                    {queuedRequests.length > 0 && (queueFilter === 'all' || queueFilter === 'queued') && (
                       <div className="mb-4">
                         <h4 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
                           Up Next ({queuedRequests.length})
@@ -875,14 +902,14 @@ export default function EventManagePage() {
                       </div>
                     )}
 
-                    {/* Other requests */}
-                    {otherRequests.length > 0 && (
+                    {/* Other requests (played/rejected shown here; queued/nowPlaying shown above) */}
+                    {otherRequests.length > 0 && (queueFilter === 'all' || queueFilter === 'played' || queueFilter === 'rejected') && (
                       <div>
                         <h4 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-                          Processed ({otherRequests.length})
+                          Processed ({queueFilter === 'played' ? playedRequests.length : queueFilter === 'rejected' ? rejectedRequests.length : otherRequests.length})
                         </h4>
                         <div className="space-y-2">
-                          {otherRequests.map(request => (
+                          {(queueFilter === 'played' ? playedRequests : queueFilter === 'rejected' ? rejectedRequests : otherRequests).map(request => (
                             <div
                               key={request.id}
                               className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 opacity-60"
