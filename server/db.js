@@ -1,0 +1,89 @@
+const Database = require('better-sqlite3');
+const path = require('path');
+
+const dbPath = path.join(__dirname, 'votebeats.db');
+const db = new Database(dbPath);
+
+// Enable WAL mode for better concurrency
+db.pragma('journal_mode = WAL');
+
+// Create tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS events (
+    id TEXT PRIMARY KEY,
+    dj_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    date TEXT,
+    start_time TEXT,
+    end_time TEXT,
+    location TEXT,
+    description TEXT,
+    status TEXT DEFAULT 'upcoming',
+    settings TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (dj_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS requests (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    song_title TEXT NOT NULL,
+    artist_name TEXT NOT NULL,
+    album_art_url TEXT,
+    duration_ms INTEGER,
+    explicit_flag INTEGER DEFAULT 0,
+    itunes_track_id TEXT,
+    requested_by TEXT NOT NULL,
+    nickname TEXT,
+    message TEXT,
+    status TEXT DEFAULT 'pending',
+    vote_count INTEGER DEFAULT 0,
+    manual_order INTEGER,
+    dj_notes TEXT,
+    prepped_in_spotify INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (event_id) REFERENCES events(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS votes (
+    id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(request_id, user_id),
+    FOREIGN KEY (request_id) REFERENCES requests(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    dj_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    target_audience TEXT DEFAULT 'all',
+    type TEXT DEFAULT 'custom',
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (event_id) REFERENCES events(id),
+    FOREIGN KEY (dj_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS attendees (
+    id TEXT PRIMARY KEY,
+    nickname TEXT,
+    code_word TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+`);
+
+module.exports = db;

@@ -1,0 +1,841 @@
+<project_specification>
+  <project_name>VoteBeats</project_name>
+
+  <overview>
+    VoteBeats is a web-based DJ song request and voting platform that enables dance attendees to request and vote on songs before and during events, while giving DJs complete control over queue management, timing, and playback flow. The primary use case is church youth dances with family-friendly content filtering, but the system is adaptable to any DJ event. A companion Electron desktop helper application provides automatic "Now Playing" detection by monitoring the local Spotify client.
+  </overview>
+
+  <technology_stack>
+    <frontend>
+      <framework>React.js (modern hooks, functional components)</framework>
+      <styling>CSS-in-JS or Tailwind CSS for mobile-responsive design</styling>
+      <state_management>React Context + Firebase real-time listeners</state_management>
+      <pwa>Progressive Web App with push notification support</pwa>
+    </frontend>
+    <backend>
+      <runtime>Node.js (Firebase Cloud Functions)</runtime>
+      <database>Firebase Firestore (real-time NoSQL)</database>
+      <authentication>Firebase Authentication (email/password for DJs)</authentication>
+      <hosting>Firebase Hosting with SSL and global CDN</hosting>
+      <storage>Firebase Storage (QR code images, exports)</storage>
+    </backend>
+    <desktop_helper>
+      <framework>Electron (cross-platform Windows + Mac)</framework>
+      <distribution>GitHub Releases with auto-update</distribution>
+      <spotify_monitoring>Local Spotify API (http://localhost:4381/)</spotify_monitoring>
+    </desktop_helper>
+    <communication>
+      <api>Firebase Firestore real-time listeners + Cloud Functions REST endpoints</api>
+      <realtime>Firestore onSnapshot listeners for live sync</realtime>
+      <push_notifications>Firebase Cloud Messaging (FCM) via browser push</push_notifications>
+    </communication>
+    <external_apis>
+      <music_search>iTunes Search API (free, no API key required)</music_search>
+      <spotify_export>Spotify Web API OAuth (persistent DJ connection for playlist export)</spotify_export>
+    </external_apis>
+  </technology_stack>
+
+  <prerequisites>
+    <environment_setup>
+      - Node.js 18+ and npm
+      - Firebase CLI installed globally (npm install -g firebase-tools)
+      - Firebase project created with Firestore, Authentication, Hosting, Functions, and Storage enabled
+      - Git for version control
+      - For desktop helper development: Electron toolchain
+    </environment_setup>
+  </prerequisites>
+
+  <feature_count>255</feature_count>
+
+  <security_and_access_control>
+    <user_roles>
+      <role name="dj">
+        <description>Event creator and manager. Authenticated via email/password.</description>
+        <permissions>
+          - Create, edit, and delete own events
+          - Configure all event settings (content filtering, voting, visibility, notifications)
+          - Approve, reject, reorder, and manage all song requests
+          - Mark songs as Now Playing / Played
+          - Send messages to attendees
+          - Export playlists and analytics
+          - Connect Spotify account for playlist export
+          - Access DJ dashboard and all management views
+          - Add private notes to requests
+          - Use desktop helper application
+          - View all attendee activity (requests, votes, nicknames)
+        </permissions>
+        <protected_routes>
+          - /dashboard/* (DJ dashboard and all sub-pages)
+          - /events/create (event creation)
+          - /events/:id/manage (event management)
+          - /events/:id/analytics (post-event analytics)
+          - /settings (DJ account settings)
+          - /spotify/connect (Spotify OAuth)
+        </protected_routes>
+      </role>
+      <role name="attendee">
+        <description>Anonymous event participant. No authentication required. Identified by browser-generated anonymous ID stored in localStorage.</description>
+        <permissions>
+          - View event page and queue (based on DJ visibility settings)
+          - Search for songs via iTunes API
+          - Submit song requests (within configured limits)
+          - Add optional message/dedication to requests
+          - Vote (upvote) on any queued or pending song
+          - Set optional nickname (stored locally and sent with requests)
+          - Use cross-device code word to link identity
+          - View own request and vote history
+          - Receive DJ messages and push notifications
+          - View "Now Playing" and upcoming queue during events
+        </permissions>
+        <protected_routes>
+          - None (all attendee pages are public via event URL)
+        </protected_routes>
+      </role>
+    </user_roles>
+    <authentication>
+      <dj_auth>
+        <method>Email/password via Firebase Authentication</method>
+        <session_timeout>Configurable, default 7 days</session_timeout>
+        <password_requirements>Minimum 8 characters, at least one uppercase, one lowercase, one number</password_requirements>
+        <features>Password reset via email, optional 2FA</features>
+      </dj_auth>
+      <attendee_auth>
+        <method>Anonymous - browser-generated UUID stored in localStorage</method>
+        <cross_device>Optional code word for identity linking across devices</cross_device>
+        <session>Persistent via localStorage (lost on clear/incognito)</session>
+      </attendee_auth>
+    </authentication>
+    <sensitive_operations>
+      - Delete event requires confirmation dialog
+      - Delete DJ account requires password re-entry
+      - Spotify OAuth connection requires explicit DJ action
+      - Bulk reject/delete of requests requires confirmation
+      - Closing vote window requires confirmation
+      - Content filter changes during active event require confirmation
+    </sensitive_operations>
+  </security_and_access_control>
+
+  <core_features>
+    <attendee_identity_system>
+      - Generate unique anonymous ID on first visit, store in localStorage
+      - Optional nickname entry (stored locally, sent with requests)
+      - Cross-device code word system for identity linking
+      - Identity persistence across browser sessions on same device
+      - Graceful handling of cleared storage (new identity generated)
+      - Graceful handling of incognito mode (temporary identity)
+      - Vote and request history tied to anonymous ID
+    </attendee_identity_system>
+
+    <event_management>
+      - Create event with name, date, start/end time, location (optional), description (optional)
+      - Auto-generate unique event URL (votebeats.com/e/{eventId})
+      - Auto-generate downloadable QR code (PNG) linking to event URL
+      - Event status lifecycle: upcoming → active → completed
+      - Content filtering settings with toggles:
+        - Block explicit songs (Spotify explicit flag via iTunes API) - default ON
+        - Filter profanity in messages - default ON
+        - Require DJ approval for all requests (manual review mode) - default OFF
+        - Warn DJ about explicit content (⚠️ indicator) - default ON
+      - Voting and request settings:
+        - Configurable request limit per person before vote close (3-5)
+        - Configurable request limit per person after vote close (0 or 1-2)
+        - Unlimited upvoting on all queued songs
+        - Voting schedule: opens immediately or scheduled, closes manual/scheduled/at event start
+      - Queue visibility settings (configurable per phase):
+        - Before vote close: full queue / own requests only / blind voting
+        - After vote close: show final playlist / hide until event
+        - During event: now playing + upcoming / now playing only / hide all
+      - Auto-close requests at specific time
+      - Cool-down period between requests from same person
+      - Duplicate song blocking (same person can't request same song twice)
+      - Event templates for recurring events (save/load default settings)
+      - Edit event details after creation
+      - Delete event with confirmation
+    </event_management>
+
+    <song_request_system>
+      - iTunes Search API integration with autocomplete
+      - Search results display: song title, artist, album art, duration, explicit flag
+      - Select song from search results
+      - Manual song entry fallback (title + artist) if not found in iTunes
+      - Optional message/dedication field (50-100 character limit)
+      - Request submission with confirmation and queue position
+      - Duplicate detection: if song already in queue, show existing request with vote button
+      - Smart fuzzy matching for song variations
+      - Explicit content flag from iTunes metadata
+      - Request status tracking: pending → queued → nowPlaying → played → rejected
+      - Request limit enforcement per attendee per event
+      - Cool-down enforcement between requests
+      - Request data: songTitle, artistName, albumArtUrl, durationMs, explicitFlag, requestedBy, nickname, message, timestamp, status, votes, voteCount
+    </song_request_system>
+
+    <voting_system>
+      - Upvote any pending or queued song (one vote per song per attendee)
+      - Cannot vote on Now Playing, Played, or Rejected songs
+      - Votes locked when song status changes to Now Playing
+      - Vote count preserved for analytics after song is played
+      - Real-time vote count updates across all connected devices
+      - Queue auto-reorders by vote count (unless DJ manually ordered)
+      - Trending indicators (e.g., "🔥 +5 votes in last hour")
+      - Social proof display ("Sarah, Mike, and 21 others voted for this")
+      - Attendees can view their own vote history
+      - DJ can see who voted for what (optional transparency setting)
+      - Unlimited voting across different songs
+    </voting_system>
+
+    <pre_event_collaborative_queue>
+      - Queue health meter: visual progress bar (queued time vs. event duration)
+      - Color-coded health status: 🟢 Good / 🟡 Getting close / 🔴 Need more songs
+      - Live rankings visible to all attendees (when visibility allows)
+      - Attendees track their own submissions and rankings
+      - Genre filters for browsing queue by mood/style
+      - Countdown timers to vote close (72hr, 24hr, 1hr, closed)
+      - Automatic notifications to attendees when queue is low
+      - Variety prompts if queue is too homogeneous in genre
+      - Post vote-close: read-only final playlist view
+      - Post vote-close: attendees see their contributions highlighted
+      - "See you at the dance!" messaging after vote close
+      - Vote window open/close scheduling (manual or automatic)
+    </pre_event_collaborative_queue>
+
+    <dj_queue_management_dashboard>
+      - Real-time queue list: song title, artist, album art, duration, vote count, requester nickname, message, status, explicit flag
+      - DJ actions per request: approve, reject/remove, mark as queued/next, mark as now playing, mark as played, drag to reorder, generate Spotify search link, add private notes
+      - Filter queue by status: pending / queued / now playing / played / rejected
+      - Sort queue: by votes (highest first), by time submitted, by song title/artist
+      - Search within queue: by song, artist, or requester
+      - Genre distribution view
+      - Queue time management:
+        - Visual timeline bar (queued time vs. event duration)
+        - Per-song duration display
+        - Running total calculation
+        - Projected end time based on current queue
+        - Color-coded alerts: 🔴 need 45+ min / 🟡 need 15-30 min / 🟢 good
+      - Batch/edit mode: pause attendee updates while reorganizing
+      - Select multiple songs for bulk actions (approve, reject, reorder)
+      - Manual queue reordering via drag-and-drop
+    </dj_queue_management_dashboard>
+
+    <desktop_helper_application>
+      - Electron-based cross-platform app (Windows + Mac)
+      - System tray icon with status indicators:
+        - 🟢 Connected and monitoring
+        - 🟡 Spotify not detected
+        - 🔴 Not connected to internet
+      - Right-click tray menu: event name, now playing, open dashboard, settings, quit
+      - Optional small floating window: event name, now playing with progress bar, next in queue, quick actions
+      - Monitor Spotify desktop app via local API (http://localhost:4381/) every 2-3 seconds
+      - Detect song changes automatically
+      - Match detected song against queue database with fuzzy logic
+      - Auto-update request status: Queued → Now Playing → Played
+      - Handle multiple songs with same name (DJ selects correct match)
+      - Graceful fallback if Spotify not running
+      - Desktop notifications ("Song ending in 30 seconds")
+      - Playback position tracking
+      - Auto-mark as played when song finishes
+      - Manual mode toggle (DJ confirms each update)
+      - Offline mode: monitor locally, queue updates for sync when online
+      - Auto-start with system (optional setting)
+      - Minimal CPU/battery impact
+      - Setup wizard: install → launch → login → select event → auto-detect Spotify
+      - Distribution via GitHub Releases with auto-update
+    </desktop_helper_application>
+
+    <spotify_integration>
+      - Generate Spotify search URLs for each queued song (spotify:search:Song%20Title%20Artist)
+      - Click to open Spotify with pre-filled search
+      - Persistent OAuth connection for DJ's Spotify account
+      - One-click playlist export from final queue
+      - Playlist naming: "Event Name - Date"
+      - Add all songs in queue order to Spotify playlist
+      - Handle songs not available on Spotify (skip with notification)
+      - Download playlist for offline playback (via Spotify's own offline feature)
+      - DJ can disconnect/reconnect Spotify at any time
+    </spotify_integration>
+
+    <proactive_dj_notifications>
+      - Action Required dashboard section at top of DJ view (color-coded by urgency)
+      - Song ending alert (30 seconds before end): desktop popup with next song info and Spotify search link
+      - Queue health alert: when queue drops below 30 minutes remaining
+      - New request notification (if manual approval mode enabled)
+      - Automation levels (DJ configurable):
+        - Fully Automatic: desktop helper monitors and updates everything
+        - Semi-Automatic: desktop helper detects, shows confirmation before updating
+        - Manual Mode: desktop helper monitors but DJ clicks to confirm each update
+      - Priority ordering: most urgent actions at top
+      - Dismissable notifications with action buttons
+    </proactive_dj_notifications>
+
+    <prep_ahead_system>
+      - "Prep Next Songs" view showing next 3-5 songs in queue
+      - Prep status per song: ⚠️ Not prepped / ✅ Ready in Spotify
+      - Spotify search link for each unprepped song
+      - DJ marks song as prepped after adding to Spotify queue
+      - During event: clear visual of what's ready vs. needs prep
+      - Prep reminders when approaching unprepped songs
+    </prep_ahead_system>
+
+    <offline_event_support>
+      - DJ offline checklist: close voting, review queue, export playlist, download for offline, enable offline mode, download backup
+      - Export queue to Spotify playlist for offline download
+      - Export queue backup as CSV
+      - Export queue backup as PDF
+      - Desktop helper offline mode: monitors Spotify locally without internet
+      - Local storage of Now Playing updates during offline
+      - Auto-sync all updates when internet connection restored
+      - Conflict resolution: server state takes precedence, local changes merged
+      - Attendees with internet see last-known state; updates sync when DJ reconnects
+    </offline_event_support>
+
+    <attendee_communication>
+      - DJ can send messages to attendees (in-app banner notifications)
+      - Template messages: "We need more songs!", "Voting closes in 24 hours!", "Great job! Queue is looking good", custom text
+      - Target audiences: everyone, people who haven't requested, top voters, people whose requests were played
+      - Browser push notifications (PWA) for attendees who opt in
+      - Message history viewable by attendees
+      - Automated triggers:
+        - Queue health drops below threshold
+        - Vote window closing soon (24hr, 1hr)
+        - Event starting soon
+    </attendee_communication>
+
+    <analytics_and_export>
+      - Post-event analytics dashboard:
+        - Most requested genre
+        - Peak request times
+        - Request acceptance rate
+        - Most voted songs
+        - Most active participants (by nickname)
+        - Song diversity metrics
+      - Export options:
+        - CSV of all requests with full metadata
+        - Spotify playlist of final queue order
+        - Spotify playlist of played songs only
+        - PDF summary report
+        - Vote statistics export
+    </analytics_and_export>
+
+    <dj_authentication_and_profile>
+      - DJ registration with email and password
+      - Login / logout
+      - Password reset via email
+      - Optional two-factor authentication
+      - DJ profile: display name, email
+      - Default event settings template (save preferences for new events)
+      - Notification preferences
+      - Session management (auto-logout after configurable period)
+      - Spotify account connection management (connect/disconnect)
+    </dj_authentication_and_profile>
+
+    <ui_ux_and_design>
+      - Mobile-first responsive design (375px, 768px, 1920px breakpoints)
+      - Dark mode and light mode toggle
+      - Large touch targets for mobile (44px minimum)
+      - Album art thumbnails throughout for visual appeal
+      - Real-time updates without page refresh (Firestore listeners)
+      - Optimistic UI updates with rollback on failure
+      - Loading states and skeleton screens during async operations
+      - Empty states with helpful messaging when no data exists
+      - Error states with user-friendly messages
+      - Keyboard shortcuts for DJ power users
+      - Drag-and-drop queue reordering on DJ dashboard
+      - Lazy loading for album art images
+      - PWA: installable, offline-capable shell, push notifications
+      - Emoji and visual indicators for engagement (🔥 trending, ⚠️ warnings, ✅ ready)
+      - Collapsible sections on DJ dashboard to reduce clutter
+      - Professional branding: energetic but not childish, works for youth events
+    </ui_ux_and_design>
+
+    <content_filtering_and_security>
+      - Explicit song blocking via iTunes API explicit flag
+      - Profanity filter on attendee messages/dedications
+      - DJ approval queue for manual review mode
+      - Rate limiting on requests (configurable cooldown)
+      - Vote throttling (one vote per song per attendee, enforced server-side)
+      - Firebase Security Rules: DJ data isolated, attendee data scoped to events
+      - Request validation on Cloud Functions (server-side)
+      - Input sanitization on all user-submitted content
+      - No PII collected beyond optional nickname
+      - Clear privacy communication about data usage
+    </content_filtering_and_security>
+  </core_features>
+
+  <database_schema>
+    <tables>
+      <dj_users>
+        - djId (string, primary key, auto-generated)
+        - email (string, unique)
+        - displayName (string)
+        - passwordHash (managed by Firebase Auth)
+        - spotifyConnected (boolean)
+        - spotifyAccessToken (string, encrypted)
+        - spotifyRefreshToken (string, encrypted)
+        - defaultEventSettings (map/object - template for new events)
+        - notificationPreferences (map/object)
+        - createdAt (timestamp)
+        - updatedAt (timestamp)
+      </dj_users>
+
+      <events>
+        - eventId (string, primary key, auto-generated)
+        - djId (string, foreign key → dj_users)
+        - name (string)
+        - date (string, YYYY-MM-DD)
+        - startTime (string, HH:MM)
+        - endTime (string, HH:MM)
+        - location (string, optional)
+        - description (string, optional)
+        - status (string: upcoming | active | completed)
+        - eventUrl (string, auto-generated)
+        - qrCodeUrl (string, auto-generated)
+        - settings.contentFilter.blockExplicit (boolean, default true)
+        - settings.contentFilter.filterProfanity (boolean, default true)
+        - settings.contentFilter.requireApproval (boolean, default false)
+        - settings.contentFilter.warnExplicit (boolean, default true)
+        - settings.voting.opensAt (timestamp or null for immediate)
+        - settings.voting.closesAt (timestamp or null for manual)
+        - settings.voting.requestLimitBeforeClose (number, default 5)
+        - settings.voting.requestLimitAfterClose (number, default 0)
+        - settings.voting.allowUnlimitedVoting (boolean, default true)
+        - settings.visibility.preEventQueueView (string: full | own | blind)
+        - settings.visibility.postCloseQueueView (string: show | hide)
+        - settings.visibility.duringEventQueueView (string: nowPlayingAndUpcoming | nowPlayingOnly | hide)
+        - settings.notifications.djNotifications (boolean, default true)
+        - settings.notifications.attendeeNotifications (boolean, default true)
+        - settings.notifications.queueHealthAlerts (boolean, default true)
+        - settings.requestCooldownMinutes (number, default 0)
+        - settings.blockDuplicateRequests (boolean, default true)
+        - createdAt (timestamp)
+        - updatedAt (timestamp)
+      </events>
+
+      <requests>
+        - requestId (string, primary key, auto-generated)
+        - eventId (string, foreign key → events)
+        - song.title (string)
+        - song.artist (string)
+        - song.albumArtUrl (string)
+        - song.durationMs (number)
+        - song.explicitFlag (boolean)
+        - song.itunesTrackId (string, optional)
+        - requestedBy.userId (string, anonymous ID)
+        - requestedBy.nickname (string, optional)
+        - message (string, optional, max 100 chars)
+        - status (string: pending | queued | nowPlaying | played | rejected)
+        - votes (array of anonymous userIds)
+        - voteCount (number)
+        - manualOrder (number, optional - for DJ manual reordering)
+        - djNotes (string, optional - private)
+        - preppedInSpotify (boolean, default false)
+        - timestamps.requested (timestamp)
+        - timestamps.approved (timestamp, optional)
+        - timestamps.queuedForSpotify (timestamp, optional)
+        - timestamps.startedPlaying (timestamp, optional)
+        - timestamps.finishedPlaying (timestamp, optional)
+        - timestamps.rejected (timestamp, optional)
+        - createdAt (timestamp)
+        - updatedAt (timestamp)
+      </requests>
+
+      <attendees>
+        - attendeeId (string, primary key - anonymous UUID)
+        - nickname (string, optional)
+        - codeWord (string, optional - hashed for cross-device linking)
+        - eventParticipation (map of eventId → { requestCount, voteCount, lastActive })
+        - createdAt (timestamp)
+        - updatedAt (timestamp)
+      </attendees>
+
+      <messages>
+        - messageId (string, primary key, auto-generated)
+        - eventId (string, foreign key → events)
+        - djId (string, foreign key → dj_users)
+        - content (string)
+        - targetAudience (string: all | noRequests | topVoters | playedRequesters)
+        - type (string: custom | template | automated)
+        - readBy (array of attendee IDs)
+        - createdAt (timestamp)
+      </messages>
+
+      <event_templates>
+        - templateId (string, primary key, auto-generated)
+        - djId (string, foreign key → dj_users)
+        - name (string)
+        - settings (map - same structure as events.settings)
+        - createdAt (timestamp)
+        - updatedAt (timestamp)
+      </event_templates>
+    </tables>
+  </database_schema>
+
+  <api_endpoints_summary>
+    <dj_auth>
+      - POST /api/auth/register (create DJ account)
+      - POST /api/auth/login (DJ login)
+      - POST /api/auth/logout (DJ logout)
+      - POST /api/auth/reset-password (send password reset email)
+      - PUT /api/auth/profile (update DJ profile)
+      - POST /api/auth/enable-2fa (enable two-factor auth)
+    </dj_auth>
+
+    <events>
+      - POST /api/events (create event)
+      - GET /api/events (list DJ's events)
+      - GET /api/events/:eventId (get event details)
+      - PUT /api/events/:eventId (update event)
+      - DELETE /api/events/:eventId (delete event)
+      - POST /api/events/:eventId/qrcode (generate/regenerate QR code)
+      - PUT /api/events/:eventId/status (update event status: upcoming/active/completed)
+      - PUT /api/events/:eventId/settings (update event settings)
+    </events>
+
+    <requests>
+      - POST /api/events/:eventId/requests (submit song request - attendee)
+      - GET /api/events/:eventId/requests (list requests - filtered by visibility settings)
+      - PUT /api/events/:eventId/requests/:requestId/status (update request status - DJ)
+      - PUT /api/events/:eventId/requests/:requestId/order (reorder request - DJ)
+      - PUT /api/events/:eventId/requests/:requestId/notes (add DJ notes)
+      - PUT /api/events/:eventId/requests/:requestId/prep (mark as prepped in Spotify)
+      - DELETE /api/events/:eventId/requests/:requestId (remove request - DJ)
+      - POST /api/events/:eventId/requests/bulk-action (batch approve/reject/reorder)
+    </requests>
+
+    <voting>
+      - POST /api/events/:eventId/requests/:requestId/vote (upvote - attendee)
+      - DELETE /api/events/:eventId/requests/:requestId/vote (remove vote - attendee)
+      - GET /api/events/:eventId/requests/:requestId/voters (get voter list - DJ)
+    </voting>
+
+    <songs>
+      - GET /api/songs/search?q={query} (iTunes API proxy with caching)
+      - GET /api/songs/:itunesTrackId (get song details)
+    </songs>
+
+    <attendees>
+      - POST /api/attendees (create/register anonymous attendee)
+      - PUT /api/attendees/:attendeeId/nickname (set nickname)
+      - POST /api/attendees/link (link identity via code word)
+      - GET /api/attendees/:attendeeId/history/:eventId (get request/vote history)
+    </attendees>
+
+    <messages>
+      - POST /api/events/:eventId/messages (DJ sends message)
+      - GET /api/events/:eventId/messages (get messages for event - attendee)
+      - PUT /api/events/:eventId/messages/:messageId/read (mark as read - attendee)
+    </messages>
+
+    <spotify>
+      - GET /api/spotify/auth (initiate Spotify OAuth)
+      - GET /api/spotify/callback (OAuth callback)
+      - POST /api/events/:eventId/spotify/export (export queue to Spotify playlist)
+      - DELETE /api/spotify/disconnect (disconnect Spotify account)
+    </spotify>
+
+    <analytics>
+      - GET /api/events/:eventId/analytics (get post-event analytics)
+      - GET /api/events/:eventId/export/csv (export requests as CSV)
+      - GET /api/events/:eventId/export/pdf (export summary as PDF)
+    </analytics>
+
+    <templates>
+      - POST /api/templates (save event template)
+      - GET /api/templates (list DJ's templates)
+      - PUT /api/templates/:templateId (update template)
+      - DELETE /api/templates/:templateId (delete template)
+    </templates>
+
+    <desktop_helper>
+      - POST /api/desktop/auth (authenticate desktop helper)
+      - POST /api/events/:eventId/now-playing (update now playing from desktop helper)
+      - POST /api/events/:eventId/sync (batch sync offline updates)
+    </desktop_helper>
+  </api_endpoints_summary>
+
+  <ui_layout>
+    <main_structure>
+      The application has two distinct interfaces:
+
+      1. ATTENDEE INTERFACE (public, accessed via event URL):
+         - Mobile-first single-page layout
+         - Top: Event header with name, date/time, status badge
+         - Now Playing section (during event): large album art, song title, artist, progress
+         - Queue Health Meter: visual progress bar with color coding
+         - Song search bar with iTunes autocomplete
+         - Queue list: cards with album art, title, artist, vote count, vote button
+         - My Requests tab: track personal submissions and votes
+         - Messages/notifications banner area
+         - Bottom: request submission form (expandable)
+
+      2. DJ DASHBOARD (authenticated, desktop-optimized with mobile support):
+         - Top bar: VoteBeats logo, event selector dropdown, DJ profile, settings
+         - Action Required banner: color-coded urgent items with action buttons
+         - Left sidebar: navigation (Queue, Requests, Messages, Analytics, Settings, Prep)
+         - Main content area:
+           - Queue view: sortable/filterable list with drag-and-drop, timeline bar
+           - Pending requests view: approval queue with bulk actions
+           - Messages view: compose and history
+           - Analytics view: charts and export buttons
+           - Settings view: all event configuration
+           - Prep view: upcoming songs prep status
+         - Queue Time Bar: always visible, showing queued time vs. event duration
+         - Right panel (collapsible): quick stats, now playing info, desktop helper status
+    </main_structure>
+
+    <key_pages>
+      - / (landing page / DJ login)
+      - /register (DJ registration)
+      - /dashboard (DJ event list)
+      - /events/create (new event form)
+      - /events/:id/manage (DJ dashboard for specific event)
+      - /events/:id/manage/queue (queue management)
+      - /events/:id/manage/pending (pending approvals)
+      - /events/:id/manage/messages (attendee messaging)
+      - /events/:id/manage/analytics (post-event analytics)
+      - /events/:id/manage/settings (event settings)
+      - /events/:id/manage/prep (prep-ahead view)
+      - /settings (DJ account settings)
+      - /spotify/connect (Spotify OAuth flow)
+      - /e/:eventId (public attendee event page)
+    </key_pages>
+  </ui_layout>
+
+  <design_system>
+    <color_palette>
+      - Primary: Vibrant purple/indigo (#6366F1) - energetic, musical, modern
+      - Secondary: Electric pink/magenta (#EC4899) - accent for CTAs and highlights
+      - Success: Green (#10B981) - queue health good, approved, prepped
+      - Warning: Amber (#F59E0B) - queue running low, needs attention
+      - Danger: Red (#EF4444) - explicit content, queue critical, rejected
+      - Neutral: Slate grays (#0F172A to #F8FAFC) for text and backgrounds
+      - Dark mode: Deep navy (#0F172A) background with lighter text
+      - Light mode: Clean white (#FFFFFF) background with dark text
+    </color_palette>
+    <typography>
+      - Headings: Inter or similar modern sans-serif, bold weights
+      - Body: Inter or system font stack for performance
+      - Monospace: For code/technical elements (event IDs, etc.)
+      - Scale: Responsive type scale (clamp-based for fluid sizing)
+    </typography>
+    <components>
+      - Rounded corners (8px default, 12px cards, full-round buttons)
+      - Subtle shadows for elevation (cards, modals)
+      - Smooth transitions and micro-animations
+      - Consistent spacing scale (4px base unit)
+      - Icon set: Lucide or Heroicons for consistency
+    </components>
+  </design_system>
+
+  <implementation_steps>
+    <step number="1">
+      <title>Phase 1: Foundation and Authentication</title>
+      <tasks>
+        - Set up Firebase project (Firestore, Auth, Hosting, Functions, Storage)
+        - Initialize React project with routing and basic layout
+        - Implement DJ registration and login (Firebase Auth)
+        - Create DJ profile and settings pages
+        - Set up Firebase Security Rules
+        - Implement dark/light mode toggle
+        - Create responsive layout shell (sidebar, top bar, content area)
+        - Set up PWA manifest and service worker
+      </tasks>
+    </step>
+    <step number="2">
+      <title>Phase 2: Event Management Core</title>
+      <tasks>
+        - Event CRUD (create, read, update, delete)
+        - Event settings configuration (all toggles and options)
+        - QR code generation and download
+        - Unique event URL generation
+        - Event status lifecycle management
+        - Event templates (save and load)
+        - DJ dashboard event list view
+      </tasks>
+    </step>
+    <step number="3">
+      <title>Phase 3: Song Search and Request System</title>
+      <tasks>
+        - iTunes Search API integration with proxy/caching
+        - Autocomplete search UI with debouncing
+        - Song request submission flow
+        - Request data model and Firestore storage
+        - Duplicate detection (fuzzy matching)
+        - Content filtering (explicit song blocking, profanity filter)
+        - Request limits and cooldown enforcement
+        - Manual song entry fallback
+        - Message/dedication field
+        - Attendee anonymous identity system (UUID + localStorage)
+        - Nickname system
+      </tasks>
+    </step>
+    <step number="4">
+      <title>Phase 4: Voting System</title>
+      <tasks>
+        - Upvote/remove vote functionality
+        - Real-time vote count updates (Firestore listeners)
+        - Vote locking based on song status
+        - Queue auto-reorder by votes
+        - Trending indicators
+        - Social proof display
+        - Vote history for attendees
+        - Server-side vote validation and throttling
+      </tasks>
+    </step>
+    <step number="5">
+      <title>Phase 5: DJ Queue Management Dashboard</title>
+      <tasks>
+        - Queue list view with all metadata
+        - DJ action buttons (approve, reject, reorder, now playing, played, notes)
+        - Drag-and-drop manual reordering
+        - Filters and sorting (by status, votes, time, search)
+        - Queue time management (timeline bar, calculations, alerts)
+        - Batch operations and edit mode
+        - Keyboard shortcuts
+        - Genre distribution view
+      </tasks>
+    </step>
+    <step number="6">
+      <title>Phase 6: Pre-Event Collaborative Queue</title>
+      <tasks>
+        - Queue health meter (visual progress bar)
+        - Live rankings display for attendees
+        - Countdown timers to vote close
+        - Vote window scheduling (open/close)
+        - Post vote-close read-only view
+        - Attendee contribution tracking
+        - Low queue notifications
+        - Cross-device code word identity linking
+      </tasks>
+    </step>
+    <step number="7">
+      <title>Phase 7: DJ Notifications and Prep System</title>
+      <tasks>
+        - Action Required dashboard section
+        - Song ending alerts (countdown timer)
+        - Queue health alerts
+        - New request notifications
+        - Automation level configuration (full/semi/manual)
+        - Prep-ahead view (next 3-5 songs)
+        - Prep status tracking
+        - Spotify search link generation
+      </tasks>
+    </step>
+    <step number="8">
+      <title>Phase 8: Attendee Communication</title>
+      <tasks>
+        - DJ message composition UI
+        - Template messages
+        - Target audience selection
+        - In-app banner notifications for attendees
+        - Browser push notifications (FCM)
+        - Message history
+        - Automated trigger messages (low queue, vote closing, event starting)
+      </tasks>
+    </step>
+    <step number="9">
+      <title>Phase 9: Spotify Integration</title>
+      <tasks>
+        - Spotify OAuth persistent connection for DJs
+        - Playlist export from queue
+        - Playlist naming and creation
+        - Handle unavailable songs
+        - Connect/disconnect Spotify account
+        - Spotify search URL generation for manual playback
+      </tasks>
+    </step>
+    <step number="10">
+      <title>Phase 10: Desktop Helper Application</title>
+      <tasks>
+        - Electron app scaffolding
+        - System tray implementation with status icons
+        - Local Spotify API monitoring (polling every 2-3 seconds)
+        - Song change detection and queue matching (fuzzy)
+        - Auto-update request statuses
+        - Manual mode with confirmation dialogs
+        - Desktop notifications
+        - Offline mode with local queue
+        - Setup wizard
+        - GitHub Releases distribution with auto-update
+        - Cross-platform build (Windows + Mac)
+      </tasks>
+    </step>
+    <step number="11">
+      <title>Phase 11: Offline Event Support</title>
+      <tasks>
+        - DJ offline checklist UI
+        - CSV export of queue
+        - PDF export of queue summary
+        - Desktop helper offline mode (local monitoring + sync on reconnect)
+        - Conflict resolution logic
+        - Queue backup download
+      </tasks>
+    </step>
+    <step number="12">
+      <title>Phase 12: Analytics and Reporting</title>
+      <tasks>
+        - Post-event analytics dashboard (charts and stats)
+        - Most requested genre, peak times, acceptance rate
+        - Most voted songs, most active participants
+        - Song diversity metrics
+        - CSV export of all request data
+        - PDF summary report generation
+        - Played songs playlist export
+      </tasks>
+    </step>
+    <step number="13">
+      <title>Phase 13: Polish, Performance, and Accessibility</title>
+      <tasks>
+        - Performance optimization (lazy loading, code splitting, caching)
+        - Accessibility audit (WCAG AA compliance)
+        - Cross-browser testing (Chrome, Safari, Firefox, Edge)
+        - Mobile responsiveness refinement
+        - Loading states and skeleton screens
+        - Error boundary implementation
+        - Empty state designs
+        - Animation and micro-interaction polish
+        - SEO basics for landing page
+        - Rate limiting and security hardening
+      </tasks>
+    </step>
+  </implementation_steps>
+
+  <success_criteria>
+    <functionality>
+      - Successfully run 3+ real events without critical issues
+      - Desktop helper auto-detection accuracy greater than 90%
+      - Real-time sync latency under 3 seconds
+      - Content filtering correctly blocks explicit songs
+      - Queue time calculation accurate within 5%
+      - Offline mode works for full event duration
+      - All CRUD operations work end-to-end for events, requests, and messages
+      - Voting system correctly enforces all rules (limits, locking, real-time updates)
+      - Pre-event collaborative queue building works with countdown and health meter
+      - Spotify playlist export creates correct playlist
+    </functionality>
+    <user_experience>
+      - DJ setup time under 10 minutes for new event
+      - Attendee request submission under 30 seconds
+      - 95% of attendees can successfully request songs without help
+      - DJ satisfaction 8/10 or higher
+      - Mobile-responsive on iOS Safari and Android Chrome
+      - Intuitive navigation requiring no documentation for attendees
+    </user_experience>
+    <technical_quality>
+      - Zero data loss during events
+      - No console errors during normal operation
+      - Page loads under 2 seconds on average connection
+      - Song search results under 500ms
+      - Optimistic UI updates for vote actions (instant feedback)
+      - Firebase free tier sufficient for projected usage (50-200 attendees per event)
+      - Clean, maintainable codebase with consistent patterns
+    </technical_quality>
+    <design_polish>
+      - Consistent design system applied across all pages
+      - Dark and light mode both fully styled
+      - Professional branding appropriate for youth events
+      - Smooth transitions and animations
+      - Clear visual hierarchy and information architecture
+      - Album art and visual elements create engaging experience
+      - Accessibility basics met (keyboard nav, contrast, labels)
+    </design_polish>
+  </success_criteria>
+</project_specification>

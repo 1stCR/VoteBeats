@@ -1,0 +1,9 @@
+node_modules/
+build/
+.env
+.env.local
+*.db
+.agent.lock
+.claude_settings.json
+.playwright-mcp/
+claude-progress.txt
