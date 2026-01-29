@@ -229,6 +229,12 @@ export default function EventManagePage() {
     }
   }
 
+  function getSpotifySearchUrl(song) {
+    if (!song) return null;
+    const query = `${song.title || ''} ${song.artist || ''}`.trim();
+    return `https://open.spotify.com/search/${encodeURIComponent(query)}`;
+  }
+
   function getStatusBadge(s) {
     switch(s) {
       case 'active':
@@ -630,6 +636,15 @@ export default function EventManagePage() {
                                   >
                                     <StickyNote className="w-4 h-4" />
                                   </button>
+                                  <a
+                                    href={getSpotifySearchUrl(request.song)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1.5 text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                                    title="Search on Spotify"
+                                  >
+                                    <ExternalLink className="w-4 h-4" />
+                                  </a>
                                   <button
                                     onClick={() => handleStatusChange(request.id, 'queued')}
                                     className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
@@ -728,6 +743,15 @@ export default function EventManagePage() {
                               <p className="text-xs text-primary-500 dark:text-primary-400">🎵 {nowPlayingRequest.requestedBy.nickname}</p>
                             )}
                           </div>
+                          <a
+                            href={getSpotifySearchUrl(nowPlayingRequest.song)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 text-green-500 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-colors"
+                            title="Search on Spotify"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
                           <button
                             onClick={() => handleStatusChange(nowPlayingRequest.id, 'played')}
                             className="px-3 py-1.5 text-xs font-medium bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition-colors"
@@ -787,6 +811,15 @@ export default function EventManagePage() {
                                   >
                                     <StickyNote className="w-4 h-4" />
                                   </button>
+                                  <a
+                                    href={getSpotifySearchUrl(request.song)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1.5 text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                                    title="Search on Spotify"
+                                  >
+                                    <ExternalLink className="w-4 h-4" />
+                                  </a>
                                   <button
                                     onClick={() => handleStatusChange(request.id, 'nowPlaying')}
                                     className="px-3 py-1.5 text-xs font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-1"
@@ -1002,6 +1035,15 @@ export default function EventManagePage() {
                           >
                             <StickyNote className="w-4 h-4" />
                           </button>
+                          <a
+                            href={getSpotifySearchUrl(request.song)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                            title="Search on Spotify"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
                           <button
                             onClick={() => handleStatusChange(request.id, 'queued')}
                             className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
