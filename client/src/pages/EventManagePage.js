@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
-import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users, StickyNote, Save, ArrowUpDown, Search } from 'lucide-react';
+import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users, StickyNote, Save, ArrowUpDown, Search, Keyboard } from 'lucide-react';
 import { api } from '../config/api';
 import { useTheme } from '../contexts/ThemeContext';
 import EventSettingsForm from '../components/EventSettingsForm';
@@ -36,6 +36,7 @@ export default function EventManagePage() {
   const [queueFilter, setQueueFilter] = useState('all'); // all, pending, queued, nowPlaying, played, rejected
   const [queueSort, setQueueSort] = useState('votes'); // votes, time, title, artist
   const [queueSearch, setQueueSearch] = useState(''); // search within queue
+  const [showShortcuts, setShowShortcuts] = useState(false); // keyboard shortcuts help
 
   // Helper to format duration from milliseconds to mm:ss
   const formatDuration = (ms) => {
@@ -254,6 +255,63 @@ export default function EventManagePage() {
     return `https://open.spotify.com/search/${encodeURIComponent(query)}`;
   }
 
+  // Keyboard shortcuts for DJ power users
+  useEffect(() => {
+    function handleKeyDown(e) {
+      // Don't trigger shortcuts when typing in inputs
+      const tag = e.target.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+      // Don't trigger with modifier keys (except shift for ?)
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+      switch (e.key) {
+        case '?':
+          e.preventDefault();
+          setShowShortcuts(prev => !prev);
+          break;
+        case 'a': {
+          // Approve top pending request (by vote count)
+          e.preventDefault();
+          const topPending = [...requests.filter(r => r.status === 'pending')]
+            .sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0))[0];
+          if (topPending) handleStatusChange(topPending.id, 'queued');
+          break;
+        }
+        case 'r': {
+          // Reject top pending request
+          e.preventDefault();
+          const topPendingR = [...requests.filter(r => r.status === 'pending')]
+            .sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0))[0];
+          if (topPendingR) handleStatusChange(topPendingR.id, 'rejected');
+          break;
+        }
+        case 'p': {
+          // Play top queued request (mark as Now Playing)
+          e.preventDefault();
+          const topQueued = requests.filter(r => r.status === 'queued')
+            .sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0))[0];
+          if (topQueued) handleStatusChange(topQueued.id, 'nowPlaying');
+          break;
+        }
+        case 'n': {
+          // Next - mark current Now Playing as Played
+          e.preventDefault();
+          const np = requests.find(r => r.status === 'nowPlaying');
+          if (np) handleStatusChange(np.id, 'played');
+          break;
+        }
+        case 'Escape':
+          setShowShortcuts(false);
+          break;
+        default:
+          break;
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requests]);
+
   function sortRequests(reqs) {
     const filtered = filterBySearch(reqs);
     return [...filtered].sort((a, b) => {
@@ -425,6 +483,15 @@ export default function EventManagePage() {
 
         {/* Theme Toggle & Delete Event */}
         <div className="p-3 border-t border-slate-200 dark:border-slate-700 space-y-1">
+          <button
+            onClick={() => setShowShortcuts(true)}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition-colors text-sm font-medium"
+            data-shortcuts-button
+          >
+            <Keyboard className="w-4 h-4" />
+            Shortcuts
+            <span className="ml-auto text-xs text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono">?</span>
+          </button>
           <button
             onClick={toggleTheme}
             className="w-full flex items-center gap-2 px-3 py-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition-colors text-sm font-medium"
@@ -1446,6 +1513,43 @@ export default function EventManagePage() {
                 {deleting ? 'Deleting...' : 'Delete Event'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Keyboard Shortcuts Help Dialog */}
+      {showShortcuts && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowShortcuts(false)}>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-sm w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Keyboard className="w-5 h-5 text-primary-500" />
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Keyboard Shortcuts</h3>
+              </div>
+              <button onClick={() => setShowShortcuts(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {[
+                { key: 'A', desc: 'Approve top pending request' },
+                { key: 'R', desc: 'Reject top pending request' },
+                { key: 'P', desc: 'Play top queued song (Now Playing)' },
+                { key: 'N', desc: 'Next song (mark played)' },
+                { key: '?', desc: 'Toggle this help' },
+                { key: 'Esc', desc: 'Close dialogs' },
+              ].map(s => (
+                <div key={s.key} className="flex items-center gap-3">
+                  <kbd className="inline-flex items-center justify-center min-w-[2rem] px-2 py-1 text-xs font-mono font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 rounded shadow-sm">
+                    {s.key}
+                  </kbd>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">{s.desc}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
+              Shortcuts are disabled when typing in text fields.
+            </p>
           </div>
         </div>
       )}
