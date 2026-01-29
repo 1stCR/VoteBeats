@@ -583,6 +583,58 @@ export default function EventManagePage() {
                   )}
                 </div>
 
+                {/* Queue time timeline bar */}
+                {requests.length > 0 && (() => {
+                  const activeRequests = requests.filter(r => ['pending', 'queued', 'nowPlaying'].includes(r.status));
+                  const totalQueueMs = activeRequests.reduce((sum, r) => sum + (r.song?.durationMs || 0), 0);
+                  const totalQueueMin = Math.round(totalQueueMs / 60000);
+                  const totalQueueFormatted = `${Math.floor(totalQueueMs / 60000)}:${String(Math.floor((totalQueueMs % 60000) / 1000)).padStart(2, '0')}`;
+
+                  // Calculate event duration from start/end time
+                  let eventDurationMin = null;
+                  if (event?.startTime && event?.endTime) {
+                    const [sh, sm] = event.startTime.split(':').map(Number);
+                    const [eh, em] = event.endTime.split(':').map(Number);
+                    eventDurationMin = (eh * 60 + em) - (sh * 60 + sm);
+                    if (eventDurationMin <= 0) eventDurationMin += 24 * 60; // handle midnight crossing
+                  }
+
+                  const percentage = eventDurationMin ? Math.min((totalQueueMin / eventDurationMin) * 100, 100) : null;
+                  const barColor = percentage === null ? 'bg-slate-400'
+                    : percentage >= 80 ? 'bg-green-500'
+                    : percentage >= 50 ? 'bg-yellow-500'
+                    : 'bg-red-500';
+                  const statusLabel = percentage === null ? ''
+                    : percentage >= 80 ? 'Good coverage'
+                    : percentage >= 50 ? 'Getting there'
+                    : 'Need more songs';
+
+                  return (
+                    <div className="mb-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600">
+                      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1.5">
+                        <span>Queue: {totalQueueFormatted} ({activeRequests.length} songs)</span>
+                        {eventDurationMin ? (
+                          <span>{statusLabel} ({Math.round(percentage)}%)</span>
+                        ) : (
+                          <span>No event time set</span>
+                        )}
+                      </div>
+                      <div className="w-full h-2.5 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                          style={{ width: percentage !== null ? `${percentage}%` : '0%' }}
+                        />
+                      </div>
+                      {eventDurationMin && (
+                        <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                          <span>0 min</span>
+                          <span>{eventDurationMin} min event</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Status filter bar and sort */}
                 {requests.length > 0 && (
                   <div className="space-y-2 mb-4">
