@@ -30,6 +30,15 @@ export default function EventManagePage() {
   const [expandedVoters, setExpandedVoters] = useState({});
   const [voterData, setVoterData] = useState({});
 
+  // Helper to format duration from milliseconds to mm:ss
+  const formatDuration = (ms) => {
+    if (!ms) return null;
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
   // Determine active view from URL path
   const pathParts = location.pathname.split('/');
   const lastPart = pathParts[pathParts.length - 1];
@@ -208,6 +217,10 @@ export default function EventManagePage() {
   }
 
   const pendingRequests = requests.filter(r => r.status === 'pending');
+  const queuedRequests = requests.filter(r => r.status === 'queued');
+  const nowPlayingRequest = requests.find(r => r.status === 'nowPlaying');
+  const playedRequests = requests.filter(r => r.status === 'played');
+  const rejectedRequests = requests.filter(r => r.status === 'rejected');
   const otherRequests = requests.filter(r => r.status !== 'pending');
 
   if (loading) {
@@ -548,6 +561,13 @@ export default function EventManagePage() {
                                     <Square className="w-5 h-5" />
                                   )}
                                 </button>
+                                {request.song?.albumArtUrl ? (
+                                  <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                                ) : (
+                                  <div className="w-10 h-10 rounded flex-shrink-0 bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
+                                    <Music className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+                                  </div>
+                                )}
                                 <div className="flex-1 min-w-0">
                                   <p className="font-medium text-slate-900 dark:text-white truncate">
                                     {request.song?.title}
@@ -555,9 +575,19 @@ export default function EventManagePage() {
                                       <span className="inline-flex items-center ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded" title="Explicit content">E</span>
                                     )}
                                   </p>
-                                  <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{request.song?.artist}</p>
+                                  <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
+                                    {request.song?.artist}
+                                    {request.song?.durationMs && (
+                                      <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">({formatDuration(request.song.durationMs)})</span>
+                                    )}
+                                  </p>
                                   {request.requestedBy?.nickname && (
                                     <p className="text-xs text-primary-500 dark:text-primary-400 truncate">🎵 {request.requestedBy.nickname}</p>
+                                  )}
+                                  {request.message && (
+                                    <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5" title={request.message}>
+                                      💬 {request.message}
+                                    </p>
                                   )}
                                 </div>
                                 <button
@@ -603,6 +633,114 @@ export default function EventManagePage() {
                       </div>
                     )}
 
+                    {/* Now Playing */}
+                    {nowPlayingRequest && (
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                          <Radio className="w-4 h-4 animate-pulse" />
+                          Now Playing
+                        </h4>
+                        <div className="flex items-center gap-3 p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border-2 border-green-300 dark:border-green-700">
+                          {nowPlayingRequest.song?.albumArtUrl ? (
+                            <img src={nowPlayingRequest.song.albumArtUrl} alt="" className="w-12 h-12 rounded flex-shrink-0 object-cover" />
+                          ) : (
+                            <div className="w-12 h-12 rounded flex-shrink-0 bg-green-200 dark:bg-green-800 flex items-center justify-center">
+                              <Music className="w-6 h-6 text-green-500" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-slate-900 dark:text-white truncate">
+                              {nowPlayingRequest.song?.title}
+                              {nowPlayingRequest.song?.explicitFlag && event?.settings?.warnExplicit !== false && (
+                                <span className="inline-flex items-center ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded" title="Explicit content">E</span>
+                              )}
+                            </p>
+                            <p className="text-sm text-slate-600 dark:text-slate-300 truncate">
+                              {nowPlayingRequest.song?.artist}
+                              {nowPlayingRequest.song?.durationMs && (
+                                <span className="ml-2 text-xs text-slate-400">({formatDuration(nowPlayingRequest.song.durationMs)})</span>
+                              )}
+                            </p>
+                            {nowPlayingRequest.requestedBy?.nickname && (
+                              <p className="text-xs text-primary-500 dark:text-primary-400">🎵 {nowPlayingRequest.requestedBy.nickname}</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleStatusChange(nowPlayingRequest.id, 'played')}
+                            className="px-3 py-1.5 text-xs font-medium bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition-colors"
+                            title="Mark as played"
+                          >
+                            Mark Played
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Queued songs with Play button */}
+                    {queuedRequests.length > 0 && (
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                          Up Next ({queuedRequests.length})
+                        </h4>
+                        <div className="space-y-2">
+                          {queuedRequests.map(request => (
+                            <div
+                              key={request.id}
+                              className="flex items-center gap-3 p-3 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600"
+                            >
+                              {request.song?.albumArtUrl ? (
+                                <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                              ) : (
+                                <div className="w-10 h-10 rounded flex-shrink-0 bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
+                                  <Music className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-slate-900 dark:text-white truncate">
+                                  {request.song?.title}
+                                  {request.song?.explicitFlag && event?.settings?.warnExplicit !== false && (
+                                    <span className="inline-flex items-center ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded" title="Explicit content">E</span>
+                                  )}
+                                </p>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
+                                  {request.song?.artist}
+                                  {request.song?.durationMs && (
+                                    <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">({formatDuration(request.song.durationMs)})</span>
+                                  )}
+                                </p>
+                                {request.requestedBy?.nickname && (
+                                  <p className="text-xs text-primary-500 dark:text-primary-400 truncate">🎵 {request.requestedBy.nickname}</p>
+                                )}
+                                {request.message && (
+                                  <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5" title={request.message}>
+                                    💬 {request.message}
+                                  </p>
+                                )}
+                              </div>
+                              <span className="text-sm text-slate-500">{request.voteCount || 0} votes</span>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <button
+                                  onClick={() => handleStatusChange(request.id, 'nowPlaying')}
+                                  className="px-3 py-1.5 text-xs font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-1"
+                                  title="Play Now"
+                                >
+                                  <Play className="w-3 h-3" />
+                                  Play
+                                </button>
+                                <button
+                                  onClick={() => handleStatusChange(request.id, 'rejected')}
+                                  className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                  title="Remove"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Other requests */}
                     {otherRequests.length > 0 && (
                       <div>
@@ -615,6 +753,13 @@ export default function EventManagePage() {
                               key={request.id}
                               className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 opacity-60"
                             >
+                              {request.song?.albumArtUrl ? (
+                                <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                              ) : (
+                                <div className="w-10 h-10 rounded flex-shrink-0 bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
+                                  <Music className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+                                </div>
+                              )}
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium text-slate-900 dark:text-white truncate">
                                   {request.song?.title}
@@ -622,9 +767,19 @@ export default function EventManagePage() {
                                     <span className="inline-flex items-center ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded" title="Explicit content">E</span>
                                   )}
                                 </p>
-                                <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{request.song?.artist}</p>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
+                                  {request.song?.artist}
+                                  {request.song?.durationMs && (
+                                    <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">({formatDuration(request.song.durationMs)})</span>
+                                  )}
+                                </p>
                                 {request.requestedBy?.nickname && (
                                   <p className="text-xs text-primary-500 dark:text-primary-400 truncate">🎵 {request.requestedBy.nickname}</p>
+                                )}
+                                {request.message && (
+                                  <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5" title={request.message}>
+                                    💬 {request.message}
+                                  </p>
                                 )}
                               </div>
                               <span className={'text-xs font-medium px-2 py-1 rounded-full ' +
@@ -701,6 +856,13 @@ export default function EventManagePage() {
                             <Square className="w-5 h-5" />
                           )}
                         </button>
+                        {request.song?.albumArtUrl ? (
+                          <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 rounded flex-shrink-0 bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
+                            <Music className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-slate-900 dark:text-white truncate">
                             {request.song?.title}
@@ -708,9 +870,19 @@ export default function EventManagePage() {
                               <span className="inline-flex items-center ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded" title="Explicit content">E</span>
                             )}
                           </p>
-                          <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{request.song?.artist}</p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
+                            {request.song?.artist}
+                            {request.song?.durationMs && (
+                              <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">({formatDuration(request.song.durationMs)})</span>
+                            )}
+                          </p>
                           {request.requestedBy?.nickname && (
                             <p className="text-xs text-primary-500 dark:text-primary-400 truncate">🎵 {request.requestedBy.nickname}</p>
+                          )}
+                          {request.message && (
+                            <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5" title={request.message}>
+                              💬 {request.message}
+                            </p>
                           )}
                         </div>
                         <button
