@@ -4,6 +4,7 @@ const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 const { sanitizeString } = require('../utils/sanitize');
 const { containsProfanity, filterProfanity } = require('../utils/profanity');
+const { findFuzzyMatches } = require('../utils/fuzzyMatch');
 
 const router = express.Router();
 
@@ -31,6 +32,43 @@ router.get('/events/:eventId/public', (req, res) => {
   }
 });
 
+
+// GET /api/events/:eventId/requests/check-similar - Check for similar songs in queue (attendee)
+router.get('/events/:eventId/requests/check-similar', (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { songTitle, artistName } = req.query;
+
+    if (!songTitle || !artistName) {
+      return res.status(400).json({ error: 'songTitle and artistName are required' });
+    }
+
+    // Check event exists
+    const event = db.prepare('SELECT id FROM events WHERE id = ?').get(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Get all non-rejected requests for this event (across ALL attendees)
+    const existingRequests = db.prepare(
+      'SELECT id, song_title, artist_name, vote_count, status FROM requests WHERE event_id = ? AND status != ?'
+    ).all(eventId, 'rejected');
+
+    // Find fuzzy matches
+    const matches = findFuzzyMatches(
+      { title: songTitle, artist: artistName },
+      existingRequests
+    );
+
+    res.json({
+      hasSimilar: matches.length > 0,
+      matches: matches.slice(0, 5) // Return top 5 matches
+    });
+  } catch (err) {
+    console.error('Check similar error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // POST /api/events/:eventId/requests - Submit song request (attendee - no auth required)
 router.post('/events/:eventId/requests', (req, res) => {

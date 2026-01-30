@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { Music, Search, Send, ThumbsUp, ListMusic, User, Link2, Flame, Clock } from 'lucide-react';
+import { Music, Search, Send, ThumbsUp, ListMusic, User, Link2, Flame, Clock, AlertTriangle } from 'lucide-react';
 import { api } from '../config/api';
 
 function generateUUID() {
@@ -43,6 +43,8 @@ export default function EventPublicPage() {
   const [selectedGenre, setSelectedGenre] = useState('all');
   const [votingCountdown, setVotingCountdown] = useState(null);
   const [votingOpenCountdown, setVotingOpenCountdown] = useState(null);
+  const [voteError, setVoteError] = useState('');
+  const [similarSongDialog, setSimilarSongDialog] = useState(null); // { song, matches }
 
   // Helper to format time diff
   const formatTimeDiff = (diff) => {
@@ -229,7 +231,7 @@ export default function EventPublicPage() {
     return event && event.settings && event.settings.blockExplicit !== false;
   }
 
-  async function handleSubmitRequest(song) {
+  async function handleSubmitRequest(song, skipSimilarCheck = false) {
     if (votingOpenCountdown?.notYetOpen) {
       alert('Voting has not opened yet. Please wait for the voting window to open!');
       return;
@@ -238,10 +240,28 @@ export default function EventPublicPage() {
       alert('Voting has closed. The final playlist is set!');
       return;
     }
+
+    const songTitle = song.trackName || song.title;
+    const artistName = song.artistName || song.artist;
+
+    // Check for similar songs in the queue (fuzzy matching)
+    if (!skipSimilarCheck) {
+      try {
+        const result = await api.checkSimilarSongs(eventId, songTitle, artistName);
+        if (result.hasSimilar && result.matches.length > 0) {
+          setSimilarSongDialog({ song, matches: result.matches });
+          return; // Don't submit yet — show dialog
+        }
+      } catch (err) {
+        // If the check fails, proceed with submission anyway
+        console.warn('Similar song check failed, proceeding:', err);
+      }
+    }
+
     try {
       await api.submitRequest(eventId, {
-        songTitle: song.trackName || song.title,
-        artistName: song.artistName || song.artist,
+        songTitle,
+        artistName,
         albumArtUrl: song.artworkUrl100 || song.albumArtUrl || null,
         durationMs: song.trackTimeMillis || song.durationMs || null,
         explicitFlag: song.trackExplicitness === 'explicit' || song.explicit || false,
@@ -251,7 +271,7 @@ export default function EventPublicPage() {
         message: message.trim() || null,
         genre: song.genre || song.primaryGenreName || null,
       });
-      setSubmitSuccess(song.trackName || song.title);
+      setSubmitSuccess(songTitle);
       setSearchQuery('');
       setSearchResults([]);
       setMessage('');
@@ -262,12 +282,48 @@ export default function EventPublicPage() {
     }
   }
 
+  function handleProceedAnyway() {
+    if (similarSongDialog) {
+      const song = similarSongDialog.song;
+      setSimilarSongDialog(null);
+      handleSubmitRequest(song, true); // Skip similar check on retry
+    }
+  }
+
+  function handleVoteOnExisting(requestId) {
+    setSimilarSongDialog(null);
+    handleVote(requestId);
+    setActiveTab('queue'); // Switch to queue tab to see the voted song
+  }
+
   async function handleVote(requestId) {
+    // Optimistic UI update: immediately update vote count and visual state
+    const previousRequests = [...requests];
+    const targetReq = requests.find(r => r.id === requestId);
+    const wasVoted = targetReq?.votedByUser;
+
+    setRequests(prev => prev.map(r => {
+      if (r.id !== requestId) return r;
+      return {
+        ...r,
+        voteCount: wasVoted
+          ? Math.max((r.voteCount || 0) - 1, 0)
+          : (r.voteCount || 0) + 1,
+        votedByUser: !wasVoted,
+      };
+    }));
+    setVoteError('');
+
     try {
       await api.voteRequest(eventId, requestId, attendeeId);
+      // Server confirmed — fetch fresh data to sync any other changes
       fetchRequests();
     } catch (err) {
-      // Already voted or error
+      // Rollback to previous state on failure
+      setRequests(previousRequests);
+      const msg = err?.message || 'Vote failed. Please try again.';
+      setVoteError(msg);
+      setTimeout(() => setVoteError(''), 4000);
     }
   }
 
@@ -307,8 +363,27 @@ export default function EventPublicPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-        <p className="text-slate-500">Loading event...</p>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4" data-loading-skeleton>
+        <div className="max-w-2xl mx-auto">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-2/3 mx-auto mb-2" />
+            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/3 mx-auto mb-6" />
+            <div className="flex gap-2 justify-center mb-6">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-10 bg-slate-200 dark:bg-slate-700 rounded-lg w-28" />
+              ))}
+            </div>
+            {[1, 2, 3].map(i => (
+              <div key={i} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3">
+                <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-lg flex-shrink-0" />
+                <div className="flex-1">
+                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4 mb-2" />
+                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -383,7 +458,7 @@ export default function EventPublicPage() {
                   <Music className="w-4 h-4 text-primary-500 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-sm font-medium text-primary-700 dark:text-primary-300">{msg.content}</p>
-                    <p className="text-xs text-primary-500 dark:text-primary-400 mt-1">DJ Announcement</p>
+                    <p className="text-xs text-primary-500 dark:text-primary-400 mt-1">DJ Announcement{msg.createdAt ? ` • ${new Date(msg.createdAt).toLocaleString()}` : ''}</p>
                   </div>
                 </div>
               </div>
@@ -409,6 +484,13 @@ export default function EventPublicPage() {
             );
           })}
         </nav>
+
+        {voteError && (
+          <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300 flex items-center gap-2" data-vote-error>
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01" /></svg>
+            {voteError}
+          </div>
+        )}
 
         <div className="bg-white dark:bg-slate-800 rounded-b-xl shadow-sm border border-t-0 border-slate-200 dark:border-slate-700 p-4 mb-8">
           {activeTab === 'request' && (
@@ -494,6 +576,7 @@ export default function EventPublicPage() {
                   <button
                     onClick={handleSearch}
                     disabled={searching}
+                    aria-label="Search songs"
                     className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50"
                   >
                     <Search className="w-4 h-4" />
@@ -508,7 +591,7 @@ export default function EventPublicPage() {
                   {searchResults.map((song, i) => (
                     <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                       {(song.artworkUrl100 || song.albumArtUrl) && (
-                        <img src={song.artworkUrl100 || song.albumArtUrl} alt="" className="w-10 h-10 rounded" />
+                        <img src={song.artworkUrl100 || song.albumArtUrl} alt="" className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{song.trackName || song.title}</p>
@@ -588,6 +671,9 @@ export default function EventPublicPage() {
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none resize-none"
                 />
               </div>
+              <p className="mt-3 text-xs text-slate-400 dark:text-slate-500" data-privacy-notice>
+                No account needed. Your requests are anonymous — only your optional nickname is shared with the DJ.
+              </p>
                 </>
               )}
             </div>
@@ -617,7 +703,7 @@ export default function EventPublicPage() {
                       {requests.filter(r => r.status === 'nowPlaying').map(req => (
                         <div key={req.id} className="flex items-center gap-3 p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800">
                           {req.song?.albumArtUrl && (
-                            <img src={req.song.albumArtUrl} alt="" className="w-12 h-12 rounded" />
+                            <img src={req.song.albumArtUrl} alt="" className="w-12 h-12 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{req.song?.title}</p>
@@ -646,7 +732,7 @@ export default function EventPublicPage() {
                       {requests.filter(r => (r.status === 'queued' || r.status === 'pending') && r.requestedBy?.userId === attendeeId).map(req => (
                         <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                           {req.song?.albumArtUrl && (
-                            <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded" />
+                            <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{req.song?.title}</p>
@@ -717,7 +803,7 @@ export default function EventPublicPage() {
                             {index + 1}
                           </span>
                           {req.song?.albumArtUrl && (
-                            <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded" />
+                            <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
@@ -797,7 +883,7 @@ export default function EventPublicPage() {
                     return (
                     <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                       {req.song?.albumArtUrl && (
-                        <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded" />
+                        <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{req.song?.title}</p>
@@ -839,7 +925,7 @@ export default function EventPublicPage() {
                   {myVotes.map(req => (
                     <div key={req.id} className="flex items-center gap-3 p-3 bg-primary-50 dark:bg-primary-900/10 rounded-lg border border-primary-200 dark:border-primary-800">
                       {req.song?.albumArtUrl && (
-                        <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded" />
+                        <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{req.song?.title}</p>
@@ -856,6 +942,76 @@ export default function EventPublicPage() {
             </div>
           )}
         </div>
+
+        {/* Similar Song Warning Dialog */}
+        {similarSongDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSimilarSongDialog(null)}>
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 relative" onClick={e => e.stopPropagation()} data-similar-dialog>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Similar Song Found</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">This song may already be in the queue</p>
+                </div>
+              </div>
+
+              <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">You're requesting:</p>
+                <p className="text-sm font-medium text-slate-900 dark:text-white">
+                  {similarSongDialog.song.trackName || similarSongDialog.song.title}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {similarSongDialog.song.artistName || similarSongDialog.song.artist}
+                </p>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Already in queue:</p>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {similarSongDialog.matches.map((match, i) => (
+                    <div key={i} className="flex items-center gap-2 p-2 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                          {match.existingRequest.songTitle}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate">
+                          {match.existingRequest.artistName}
+                        </p>
+                        <p className="text-xs text-primary-500 dark:text-primary-400 mt-0.5">
+                          {match.existingRequest.voteCount || 0} {(match.existingRequest.voteCount || 0) === 1 ? 'vote' : 'votes'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleVoteOnExisting(match.existingRequest.id)}
+                        className="px-3 py-1.5 bg-primary-500 text-white text-xs font-medium rounded-lg hover:bg-primary-600 transition-colors flex items-center gap-1 flex-shrink-0"
+                      >
+                        <ThumbsUp className="w-3 h-3" />
+                        Vote
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleProceedAnyway}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                >
+                  Request Anyway
+                </button>
+                <button
+                  onClick={() => setSimilarSongDialog(null)}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

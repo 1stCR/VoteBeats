@@ -141,6 +141,9 @@ export const api = {
     apiRequest(`/api/events/${id}`, { method: 'DELETE' }),
 
   // Requests
+  checkSimilarSongs: (eventId, songTitle, artistName) =>
+    apiRequest(`/api/events/${eventId}/requests/check-similar?songTitle=${encodeURIComponent(songTitle)}&artistName=${encodeURIComponent(artistName)}`),
+
   submitRequest: (eventId, requestData) =>
     apiRequest(`/api/events/${eventId}/requests`, {
       method: 'POST',
