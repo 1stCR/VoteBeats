@@ -119,8 +119,15 @@ export default function DashboardPage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-12">
-              <p className="text-slate-500">Loading events...</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" data-loading-skeleton>
+              {[1, 2, 3].map(i => (
+                <div key={i} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 animate-pulse">
+                  <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-3/4 mb-3" />
+                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2 mb-4" />
+                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-2/3 mb-2" />
+                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/3" />
+                </div>
+              ))}
             </div>
           ) : events.length === 0 ? (
             <div className="text-center py-12">

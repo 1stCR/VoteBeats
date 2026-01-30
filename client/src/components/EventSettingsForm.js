@@ -26,6 +26,7 @@ export default function EventSettingsForm({ event, eventId, onSaved }) {
     duringEventVisibility: 'nowPlayingAndUpcoming',
     requestCloseTime: '',
     cooldownMinutes: 0,
+    lowQueueThreshold: 3,
   });
   const [templates, setTemplates] = useState([]);
   const [templateName, setTemplateName] = useState('');
@@ -64,6 +65,7 @@ export default function EventSettingsForm({ event, eventId, onSaved }) {
         duringEventVisibility: settings.duringEventVisibility || 'nowPlayingAndUpcoming',
         requestCloseTime: settings.requestCloseTime || '',
         cooldownMinutes: settings.cooldownMinutes || 0,
+        lowQueueThreshold: settings.lowQueueThreshold !== undefined ? settings.lowQueueThreshold : 3,
       });
     }
   }, [event]);
@@ -71,8 +73,8 @@ export default function EventSettingsForm({ event, eventId, onSaved }) {
   async function saveTemplate() {
     if (!templateName.trim()) return;
     try {
-      const { blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit, postCloseRequestLimit, votingSchedule, votingOpenTime, votingCloseMode, votingCloseTime, votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime, cooldownMinutes } = formData;
-      const settings = { blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit, postCloseRequestLimit, votingSchedule, votingOpenTime, votingCloseMode, votingCloseTime, votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime, cooldownMinutes };
+      const { blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit, postCloseRequestLimit, votingSchedule, votingOpenTime, votingCloseMode, votingCloseTime, votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime, cooldownMinutes, lowQueueThreshold } = formData;
+      const settings = { blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit, postCloseRequestLimit, votingSchedule, votingOpenTime, votingCloseMode, votingCloseTime, votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime, cooldownMinutes, lowQueueThreshold };
       const created = await api.createTemplate(templateName.trim(), settings);
       setTemplates(prev => [created, ...prev]);
       setTemplateName('');
@@ -102,6 +104,7 @@ export default function EventSettingsForm({ event, eventId, onSaved }) {
       duringEventVisibility: s.duringEventVisibility || 'nowPlayingAndUpcoming',
       requestCloseTime: s.requestCloseTime || '',
       cooldownMinutes: s.cooldownMinutes || 0,
+      lowQueueThreshold: s.lowQueueThreshold !== undefined ? s.lowQueueThreshold : 3,
     }));
     setSaved(false);
   }
@@ -121,10 +124,10 @@ export default function EventSettingsForm({ event, eventId, onSaved }) {
     setError('');
     setSaved(false);
     try {
-      const { blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit, postCloseRequestLimit, votingSchedule, votingOpenTime, votingCloseMode, votingCloseTime, votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime, cooldownMinutes, ...eventFields } = formData;
+      const { blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit, postCloseRequestLimit, votingSchedule, votingOpenTime, votingCloseMode, votingCloseTime, votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime, cooldownMinutes, lowQueueThreshold, ...eventFields } = formData;
       const updated = await api.updateEvent(eventId, {
         ...eventFields,
-        settings: { ...(event?.settings || {}), blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit: requestLimit > 0 ? requestLimit : 0, postCloseRequestLimit: postCloseRequestLimit !== '' ? parseInt(postCloseRequestLimit) || 0 : undefined, votingSchedule, votingOpenTime: votingSchedule === 'scheduled' ? votingOpenTime : '', votingCloseMode, votingCloseTime: votingCloseMode === 'scheduled' ? votingCloseTime : '', votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime: requestCloseTime || undefined, cooldownMinutes: cooldownMinutes > 0 ? cooldownMinutes : 0 },
+        settings: { ...(event?.settings || {}), blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit: requestLimit > 0 ? requestLimit : 0, postCloseRequestLimit: postCloseRequestLimit !== '' ? parseInt(postCloseRequestLimit) || 0 : undefined, votingSchedule, votingOpenTime: votingSchedule === 'scheduled' ? votingOpenTime : '', votingCloseMode, votingCloseTime: votingCloseMode === 'scheduled' ? votingCloseTime : '', votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime: requestCloseTime || undefined, cooldownMinutes: cooldownMinutes > 0 ? cooldownMinutes : 0, lowQueueThreshold: lowQueueThreshold > 0 ? lowQueueThreshold : 3 },
       });
       onSaved(updated);
       setSaved(true);
@@ -540,6 +543,24 @@ export default function EventSettingsForm({ event, eventId, onSaved }) {
               max="120"
               value={formData.cooldownMinutes}
               onChange={(e) => handleChange('cooldownMinutes', parseInt(e.target.value) || 0)}
+              className="w-20 px-3 py-1.5 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded-lg text-slate-900 dark:text-white text-center focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+            />
+          </div>
+        </div>
+
+        {/* Low Queue Notification Threshold */}
+        <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 border border-slate-200 dark:border-slate-600">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Low Queue Alert Threshold</label>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Notify attendees when queued songs fall below this number (0 = disabled)</p>
+            </div>
+            <input
+              type="number"
+              min="0"
+              max="20"
+              value={formData.lowQueueThreshold}
+              onChange={(e) => handleChange('lowQueueThreshold', parseInt(e.target.value) || 0)}
               className="w-20 px-3 py-1.5 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded-lg text-slate-900 dark:text-white text-center focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
             />
           </div>

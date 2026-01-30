@@ -8,6 +8,48 @@ const { findFuzzyMatches } = require('../utils/fuzzyMatch');
 
 const router = express.Router();
 
+// Helper: Check queue health and auto-generate a DJ message if queue is low
+function checkQueueHealthAndNotify(eventId) {
+  try {
+    const event = db.prepare('SELECT id, dj_id, settings FROM events WHERE id = ?').get(eventId);
+    if (!event) return;
+
+    const settings = JSON.parse(event.settings || '{}');
+    const threshold = settings.lowQueueThreshold;
+    if (!threshold || threshold <= 0) return;
+
+    // Count queued + pending songs (active queue)
+    const queueCount = db.prepare(
+      "SELECT COUNT(*) as cnt FROM requests WHERE event_id = ? AND status IN ('queued', 'pending')"
+    ).get(eventId);
+    const count = queueCount?.cnt || 0;
+
+    if (count > threshold) return;
+
+    // Check if we already sent an auto queue_low message recently (within last 10 minutes)
+    const recentAutoMsg = db.prepare(
+      "SELECT id FROM messages WHERE event_id = ? AND type = 'auto_queue_low' AND created_at > datetime('now', '-10 minutes')"
+    ).get(eventId);
+
+    if (recentAutoMsg) return; // Don't spam - already sent recently
+
+    // Auto-generate a DJ message
+    const messageId = uuidv4();
+    const content = count === 0
+      ? '🎵 The queue is empty! Request your favorite songs to keep the music going!'
+      : `⚠️ Only ${count} song${count === 1 ? '' : 's'} left in the queue! Help keep the party going — request more songs!`;
+
+    db.prepare(`
+      INSERT INTO messages (id, event_id, dj_id, content, target_audience, type)
+      VALUES (?, ?, ?, ?, 'all', 'auto_queue_low')
+    `).run(messageId, eventId, event.dj_id, content);
+
+    console.log(`[Auto] Queue low notification sent for event ${eventId} (${count} songs remaining)`);
+  } catch (err) {
+    console.error('Queue health check error:', err);
+  }
+}
+
 // GET /api/events/:eventId/public - Get public event info (no auth required)
 router.get('/events/:eventId/public', (req, res) => {
   try {
@@ -433,6 +475,10 @@ router.put('/events/:eventId/requests/bulk-reject', authenticateToken, (req, res
     });
 
     const count = updateMany(requestIds);
+
+    // Check queue health after bulk rejection
+    checkQueueHealthAndNotify(eventId);
+
     res.json({ message: `${count} requests rejected`, count });
   } catch (err) {
     console.error('Bulk reject error:', err);
@@ -462,6 +508,11 @@ router.put('/events/:eventId/requests/:requestId/status', authenticateToken, (re
 
     db.prepare('UPDATE requests SET status = ?, updated_at = datetime(\'now\') WHERE id = ?')
       .run(status, req.params.requestId);
+
+    // Check queue health after status changes that reduce the active queue
+    if (['played', 'rejected', 'nowPlaying'].includes(status)) {
+      checkQueueHealthAndNotify(req.params.eventId);
+    }
 
     const updated = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.requestId);
     res.json(formatRequest(updated));

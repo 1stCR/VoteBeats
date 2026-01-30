@@ -298,6 +298,15 @@ export default function EventManagePage() {
     fetchDJMessages();
   }, [fetchDJMessages]);
 
+  // Re-fetch messages when navigating to messages tab, and poll every 15s while on messages tab
+  useEffect(() => {
+    if (location.pathname.includes('/messages')) {
+      fetchDJMessages();
+      const interval = setInterval(fetchDJMessages, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [location.pathname, fetchDJMessages]);
+
   async function handleSendDJMessage() {
     if (!newDJMessage.trim()) return;
     setSendingMessage(true);
@@ -2306,6 +2315,296 @@ export default function EventManagePage() {
             const maxGenreCount = topGenres.length > 0 ? topGenres[0][1] : 1;
             const topGenreName = topGenres.length > 0 ? topGenres[0][0] : null;
 
+            // PDF export function - generates comprehensive summary report
+            const exportPDF = () => {
+              const eventName = event?.name || 'Event';
+              const eventDate = event?.date || '';
+              const eventLocation = event?.location || '';
+              const eventDescription = event?.description || '';
+
+              // Approval rate
+              const approvalRate = totalRequests > 0 ? Math.round((approvedCount / totalRequests) * 100) : 0;
+
+              // Top songs rows
+              const topSongRows = topSongs.map((r, i) => {
+                const title = r.song?.title || r.songTitle || '';
+                const artist = r.song?.artist || r.artistName || '';
+                const votes = r.voteCount || 0;
+                const status = r.status || '';
+                const statusColors = { played: '#16a34a', nowPlaying: '#2563eb', queued: '#7c3aed', pending: '#d97706', rejected: '#dc2626' };
+                const statusColor = statusColors[status] || '#64748b';
+                return `<tr>
+                  <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;color:#6366f1;">${i + 1}</td>
+                  <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;">${title}</td>
+                  <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#475569;">${artist}</td>
+                  <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;color:#6366f1;">${votes}</td>
+                  <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;"><span style="background:${statusColor};color:white;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">${status}</span></td>
+                </tr>`;
+              }).join('');
+
+              // Top artists rows
+              const topArtistRows = topArtists.map(([artist, count], i) => {
+                const pct = totalRequests > 0 ? Math.round((count / totalRequests) * 100) : 0;
+                return `<tr>
+                  <td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;color:#6366f1;">${i + 1}</td>
+                  <td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;">${artist}</td>
+                  <td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:center;">${count}</td>
+                  <td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:center;color:#64748b;">${pct}%</td>
+                </tr>`;
+              }).join('');
+
+              // Genre rows
+              const genreRows = topGenres.slice(0, 8).map(([genre, count]) => {
+                const pct = totalRequests > 0 ? Math.round((count / totalRequests) * 100) : 0;
+                const barWidth = Math.round((count / maxGenreCount) * 100);
+                return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+                  <span style="width:120px;text-align:right;font-size:12px;font-weight:500;color:#334155;">${genre}</span>
+                  <div style="flex:1;background:#f1f5f9;border-radius:6px;height:20px;overflow:hidden;">
+                    <div style="width:${barWidth}%;background:linear-gradient(90deg,#6366f1,#8b5cf6);height:100%;border-radius:6px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;">
+                      ${count > 0 ? `<span style="font-size:10px;font-weight:700;color:white;">${count}</span>` : ''}
+                    </div>
+                  </div>
+                  <span style="width:40px;font-size:11px;color:#94a3b8;">${pct}%</span>
+                </div>`;
+              }).join('');
+
+              // Status distribution rows
+              const statusColors = { Played: '#16a34a', 'Now Playing': '#2563eb', Queued: '#7c3aed', Pending: '#d97706', Rejected: '#dc2626' };
+              const statusRows = statusData.map(item => {
+                const barWidth = Math.round((item.count / Math.max(maxStatusCount, 1)) * 100);
+                const bgColor = statusColors[item.label] || '#94a3b8';
+                return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+                  <span style="width:90px;text-align:right;font-size:12px;font-weight:500;color:${bgColor};">${item.label}</span>
+                  <div style="flex:1;background:#f1f5f9;border-radius:6px;height:22px;overflow:hidden;">
+                    <div style="width:${Math.max(barWidth, item.count > 0 ? 8 : 0)}%;background:${bgColor};height:100%;border-radius:6px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;">
+                      ${item.count > 0 ? `<span style="font-size:11px;font-weight:700;color:white;">${item.count}</span>` : ''}
+                    </div>
+                  </div>
+                  ${item.count === 0 ? '<span style="font-size:11px;color:#94a3b8;">0</span>' : ''}
+                </div>`;
+              }).join('');
+
+              // Peak times
+              const peakTimeRows = hourEntries.map(entry => {
+                const barWidth = Math.round((entry.count / Math.max(maxHourCount, 1)) * 100);
+                const isPeak = peakHour && entry.hour === peakHour.hour;
+                return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+                  <span style="width:50px;text-align:right;font-size:11px;font-family:monospace;font-weight:${isPeak ? '700' : '500'};color:${isPeak ? '#6366f1' : '#64748b'};">${formatHour(entry.hour)}</span>
+                  <div style="flex:1;background:#f1f5f9;border-radius:4px;height:18px;overflow:hidden;">
+                    <div style="width:${barWidth}%;background:${isPeak ? '#6366f1' : '#818cf8'};height:100%;border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;">
+                      ${entry.count > 0 ? `<span style="font-size:10px;font-weight:700;color:white;">${entry.count}</span>` : ''}
+                    </div>
+                  </div>
+                </div>`;
+              }).join('');
+
+              // Top participants
+              const participantRows = topParticipants.map((p, i) => {
+                return `<tr>
+                  <td style="padding:5px 12px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;color:#6366f1;">${i + 1}</td>
+                  <td style="padding:5px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;">${p.nickname || 'Anonymous'}</td>
+                  <td style="padding:5px 12px;border-bottom:1px solid #e2e8f0;text-align:center;">${p.requestCount}</td>
+                </tr>`;
+              }).join('');
+
+              // Full song list table
+              const allSongRows = requests.map((r, i) => {
+                const title = r.song?.title || r.songTitle || '';
+                const artist = r.song?.artist || r.artistName || '';
+                const status = r.status || '';
+                const votes = r.voteCount || 0;
+                const genre = r.song?.genre || '';
+                const duration = r.song?.durationMs || r.durationMs;
+                const durationStr = duration ? `${Math.floor(duration / 60000)}:${String(Math.floor((duration % 60000) / 1000)).padStart(2, '0')}` : '';
+                const statusColorsMap = { played: '#16a34a', nowPlaying: '#2563eb', queued: '#7c3aed', pending: '#d97706', rejected: '#dc2626' };
+                const sColor = statusColorsMap[status] || '#64748b';
+                return `<tr>
+                  <td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:12px;">${i + 1}</td>
+                  <td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;font-weight:600;font-size:12px;">${title}</td>
+                  <td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#475569;">${artist}</td>
+                  <td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:11px;"><span style="background:${sColor};color:white;padding:1px 6px;border-radius:10px;font-weight:600;">${status}</span></td>
+                  <td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:12px;font-weight:600;">${votes}</td>
+                  <td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#64748b;">${genre}</td>
+                  <td style="padding:5px 8px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:12px;color:#64748b;">${durationStr}</td>
+                </tr>`;
+              }).join('');
+
+              const html = `<!DOCTYPE html>
+<html><head><title>${eventName} - Event Summary Report</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; margin: 0; color: #1e293b; background: #fff; }
+  .page { max-width: 800px; margin: 0 auto; padding: 40px; }
+  .header { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; padding: 32px; border-radius: 16px; margin-bottom: 28px; }
+  .header h1 { font-size: 28px; font-weight: 800; margin-bottom: 6px; }
+  .header .subtitle { color: rgba(255,255,255,0.85); font-size: 14px; line-height: 1.5; }
+  .header .badge { display: inline-block; background: rgba(255,255,255,0.2); border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 600; margin-top: 8px; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+  .metric { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; text-align: center; }
+  .metric-value { font-size: 28px; font-weight: 800; }
+  .metric-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-top: 2px; }
+  .metric-sub { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+  .section { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+  .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #334155; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #f1f5f9; padding: 8px 12px; text-align: left; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: #475569; border-bottom: 2px solid #cbd5e1; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .quick-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+  .quick-stat { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; text-align: center; }
+  .quick-stat-value { font-size: 22px; font-weight: 800; color: #6366f1; }
+  .quick-stat-label { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 2px; }
+  .footer { text-align: center; padding: 20px; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; margin-top: 10px; }
+  .highlight { color: #6366f1; font-weight: 700; }
+  @media print {
+    body { margin: 0; }
+    .page { padding: 20px; max-width: 100%; }
+    .header { break-inside: avoid; }
+    .section { break-inside: avoid; }
+    .metrics { break-inside: avoid; }
+  }
+</style></head><body>
+<div class="page">
+  <!-- Header -->
+  <div class="header">
+    <h1>${eventName}</h1>
+    <div class="subtitle">
+      ${eventDate ? 'Date: ' + eventDate : ''}${eventLocation ? (eventDate ? ' &bull; ' : '') + 'Location: ' + eventLocation : ''}
+      ${eventDescription ? '<br/>' + eventDescription : ''}
+    </div>
+    <div class="badge">VoteBeats Event Summary Report &bull; Generated ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</div>
+  </div>
+
+  <!-- Key Metrics -->
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-value" style="color:#334155;">${totalRequests}</div>
+      <div class="metric-label">Total Requests</div>
+      <div class="metric-sub">${approvedCount} approved</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value" style="color:#6366f1;">${totalVotes}</div>
+      <div class="metric-label">Total Votes</div>
+      <div class="metric-sub">${avgVotes} avg per song</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value" style="color:#16a34a;">${playedCount}</div>
+      <div class="metric-label">Songs Played</div>
+      <div class="metric-sub">${totalPlayMin}m ${totalPlaySec}s total</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value" style="color:#7c3aed;">${uniqueRequesters}</div>
+      <div class="metric-label">Unique Attendees</div>
+      <div class="metric-sub">${withMessages} with dedications</div>
+    </div>
+  </div>
+
+  <!-- Quick Stats -->
+  <div class="quick-stats">
+    <div class="quick-stat">
+      <div class="quick-stat-value">${maxVotes}</div>
+      <div class="quick-stat-label">Most Votes (Single Song)</div>
+    </div>
+    <div class="quick-stat">
+      <div class="quick-stat-value">${approvalRate}%</div>
+      <div class="quick-stat-label">Approval Rate</div>
+    </div>
+    <div class="quick-stat">
+      <div class="quick-stat-value">${uniqueArtists}</div>
+      <div class="quick-stat-label">Unique Artists</div>
+    </div>
+  </div>
+
+  <!-- Two Column: Status Distribution + Peak Times -->
+  <div class="two-col">
+    <div class="section">
+      <div class="section-title">Request Status Distribution</div>
+      ${statusRows}
+    </div>
+    <div class="section">
+      <div class="section-title">Peak Request Times</div>
+      ${hourEntries.length > 0 ? peakTimeRows + (peakHour ? '<div style="margin-top:8px;font-size:11px;color:#6366f1;font-weight:600;">Peak hour: ' + formatHour(peakHour.hour) + ' (' + peakHour.count + ' requests)</div>' : '') : '<div style="font-size:12px;color:#94a3b8;">No timing data available.</div>'}
+    </div>
+  </div>
+
+  <!-- Two Column: Top Songs + Top Artists -->
+  <div class="two-col">
+    <div class="section">
+      <div class="section-title">Top Voted Songs</div>
+      ${topSongs.length > 0 ? `<table>
+        <thead><tr><th style="text-align:center;width:30px;">#</th><th>Song</th><th>Artist</th><th style="text-align:center;">Votes</th><th style="text-align:center;">Status</th></tr></thead>
+        <tbody>${topSongRows}</tbody>
+      </table>` : '<div style="font-size:12px;color:#94a3b8;">No songs requested yet.</div>'}
+    </div>
+    <div class="section">
+      <div class="section-title">Most Requested Artists</div>
+      ${topArtists.length > 0 ? `<table>
+        <thead><tr><th style="text-align:center;width:30px;">#</th><th>Artist</th><th style="text-align:center;">Count</th><th style="text-align:center;">Share</th></tr></thead>
+        <tbody>${topArtistRows}</tbody>
+      </table>` : '<div style="font-size:12px;color:#94a3b8;">No artist data available.</div>'}
+    </div>
+  </div>
+
+  <!-- Two Column: Genre Breakdown + Top Participants -->
+  <div class="two-col">
+    <div class="section">
+      <div class="section-title">Genre Breakdown</div>
+      ${topGenres.length > 0 ? genreRows + (topGenreName ? '<div style="margin-top:8px;font-size:11px;color:#64748b;">Top genre: <span class="highlight">' + topGenreName + '</span></div>' : '') : '<div style="font-size:12px;color:#94a3b8;">No genre data available.</div>'}
+    </div>
+    <div class="section">
+      <div class="section-title">Most Active Participants</div>
+      ${topParticipants.length > 0 ? `<table>
+        <thead><tr><th style="text-align:center;width:30px;">#</th><th>Nickname</th><th style="text-align:center;">Requests</th></tr></thead>
+        <tbody>${participantRows}</tbody>
+      </table>` : '<div style="font-size:12px;color:#94a3b8;">No participant data available.</div>'}
+    </div>
+  </div>
+
+  <!-- Diversity Metrics -->
+  <div class="section">
+    <div class="section-title">Song Diversity Metrics</div>
+    <div style="display:flex;gap:28px;align-items:center;">
+      <div style="text-align:center;">
+        <div style="font-size:32px;font-weight:800;color:${artistDiversity >= 70 ? '#16a34a' : artistDiversity >= 40 ? '#d97706' : '#dc2626'};">${artistDiversity}%</div>
+        <div style="font-size:11px;color:#64748b;font-weight:600;">ARTIST VARIETY SCORE</div>
+      </div>
+      <div style="flex:1;font-size:12px;color:#475569;line-height:1.6;">
+        ${topGenres.length > 0 ? '<strong>' + topGenres.length + '</strong> genres represented' : 'No genre data'} &bull;
+        <strong>${uniqueArtists}</strong> unique artists out of <strong>${totalRequests}</strong> total requests &bull;
+        ${artistDiversity >= 70 ? 'Excellent variety! Your audience has diverse taste.' : artistDiversity >= 40 ? 'Good mix with some favorite artists.' : 'Your audience has strong artist preferences.'}
+      </div>
+    </div>
+  </div>
+
+  <!-- Full Song List -->
+  <div class="section">
+    <div class="section-title">Complete Song List (${requests.length} songs)</div>
+    ${requests.length > 0 ? `<table>
+      <thead><tr>
+        <th style="text-align:center;width:30px;">#</th><th>Song Title</th><th>Artist</th>
+        <th style="text-align:center;">Status</th><th style="text-align:center;">Votes</th>
+        <th>Genre</th><th style="text-align:center;">Duration</th>
+      </tr></thead>
+      <tbody>${allSongRows}</tbody>
+    </table>` : '<div style="font-size:12px;color:#94a3b8;">No songs requested.</div>'}
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <strong>VoteBeats</strong> &bull; Event Summary Report for "${eventName}" &bull; Generated ${new Date().toLocaleString()}<br/>
+    <span style="color:#cbd5e1;">Let your crowd pick the beats</span>
+  </div>
+</div>
+</body></html>`;
+
+              const printWindow = window.open('', '_blank');
+              if (printWindow) {
+                printWindow.document.write(html);
+                printWindow.document.close();
+                printWindow.focus();
+                setTimeout(() => printWindow.print(), 500);
+              }
+            };
+
             // CSV export function
             const exportCSV = () => {
               const headers = ['Song Title', 'Artist', 'Genre', 'Status', 'Votes', 'Requester', 'Nickname', 'Message', 'Duration (ms)', 'Explicit', 'Created At', 'Updated At'];
@@ -2342,14 +2641,24 @@ export default function EventManagePage() {
                       <BarChart3 className="w-6 h-6 text-primary-500" />
                       <h3 className="text-xl font-bold text-slate-900 dark:text-white">Event Analytics</h3>
                     </div>
-                    <button
-                      onClick={exportCSV}
-                      className="flex items-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-lg transition-colors"
-                      data-export-csv
-                    >
-                      <Download className="w-4 h-4" />
-                      Export CSV
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={exportPDF}
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors"
+                        data-export-pdf
+                      >
+                        <Download className="w-4 h-4" />
+                        Export PDF
+                      </button>
+                      <button
+                        onClick={exportCSV}
+                        className="flex items-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-lg transition-colors"
+                        data-export-csv
+                      >
+                        <Download className="w-4 h-4" />
+                        Export CSV
+                      </button>
+                    </div>
                   </div>
                   <p className="text-sm text-slate-500 dark:text-slate-400">
                     Overview of {event?.name || 'your event'} activity and engagement

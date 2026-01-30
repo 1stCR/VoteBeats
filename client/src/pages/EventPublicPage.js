@@ -367,6 +367,20 @@ export default function EventPublicPage() {
     return null;
   })();
 
+  // Low queue notification: alert attendees when queue needs more songs
+  const lowQueueAlert = (() => {
+    const threshold = event?.settings?.lowQueueThreshold;
+    if (!threshold || threshold <= 0) return null;
+    const queuedCount = requests.filter(r => r.status === 'queued' || r.status === 'pending').length;
+    if (queuedCount === 0) {
+      return { count: 0, threshold, empty: true, message: 'The queue is empty! Be the first to request a song and get the party started!' };
+    }
+    if (queuedCount <= threshold) {
+      return { count: queuedCount, threshold, empty: false, message: `Only ${queuedCount} song${queuedCount === 1 ? '' : 's'} in the queue! Help keep the music going \u2014 request your favorites now!` };
+    }
+    return null;
+  })();
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4" data-loading-skeleton>
@@ -523,6 +537,22 @@ export default function EventPublicPage() {
                 </div>
               ) : (
                 <>
+              {lowQueueAlert && (
+                <div id="low-queue-alert" className={`mb-4 p-3 rounded-lg flex items-start gap-2 ${
+                  lowQueueAlert.empty
+                    ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                    : 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800'
+                }`}>
+                  <span className="text-lg flex-shrink-0">{lowQueueAlert.empty ? '\uD83C\uDFB5' : '\u26A0\uFE0F'}</span>
+                  <p className={`text-sm font-medium ${
+                    lowQueueAlert.empty
+                      ? 'text-red-700 dark:text-red-300'
+                      : 'text-orange-700 dark:text-orange-300'
+                  }`}>
+                    {lowQueueAlert.message}
+                  </p>
+                </div>
+              )}
               {genrePrompt && (
                 <div id="variety-prompt" className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                   <p className="text-sm text-amber-700 dark:text-amber-300">
