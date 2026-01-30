@@ -1,5 +1,34 @@
 ===== VoteBeats Development Progress =====
 
+=== Session: 2026-01-30 (Session 20 - Continuation) ===
+Status: 208/255 features passing (81.6%)
+
+FEATURES IMPLEMENTED THIS SESSION:
+- Feature #123: DJ drag-and-drop reorder queue - PASSED
+  - Added GripVertical drag handle icon to each "Up Next" queue item
+  - Added drag state variables (draggedRequestId, dragOverRequestId)
+  - Added HTML5 drag-and-drop handlers (handleDragStart, handleDragOver, handleDrop, handleDragEnd)
+  - Updated sortRequests() to prioritize manualOrder over vote count
+  - Optimistic UI update with server persistence via api.updateRequestOrder()
+  - All queued items get sequential manualOrder values on reorder
+  - Visual feedback: dragged item becomes semi-transparent, drop target shows border indicator
+  - Order persists after page refresh (verified via full page reload)
+  - Zero console errors
+
+CODE CHANGES:
+1. client/src/pages/EventManagePage.js - Added GripVertical import, drag state, drag handlers,
+   updated sortRequests() for manualOrder, added draggable UI to queue items
+
+REGRESSION CHECK:
+- Queue still displays correctly with 3 songs
+- Play, Remove, Add Note, Spotify buttons all still visible
+- Sort by Votes/Time/Title/Artist buttons still present
+- Zero console errors on final test
+
+NEXT SESSION:
+- Continue with next pending feature from backlog
+- 208/255 features passing (81.6%)
+
 === Session: 2026-01-30 (Session 20) ===
 Status: 207/255 features passing (81.2%)
 

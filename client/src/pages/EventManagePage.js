@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
-import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users, StickyNote, Save, ArrowUpDown, Search, Keyboard } from 'lucide-react';
+import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users, StickyNote, Save, ArrowUpDown, Search, Keyboard, GripVertical } from 'lucide-react';
 import { api } from '../config/api';
 import { useTheme } from '../contexts/ThemeContext';
 import EventSettingsForm from '../components/EventSettingsForm';
@@ -41,6 +41,37 @@ export default function EventManagePage() {
   const [dismissedAlerts, setDismissedAlerts] = useState(new Set()); // set of songIds already dismissed
   const [requestToasts, setRequestToasts] = useState([]); // toast notifications for new requests
   const knownRequestIds = useRef(null); // tracks known request IDs to detect new ones
+  const [draggedRequestId, setDraggedRequestId] = useState(null); // drag-and-drop: ID being dragged
+  const [dragOverRequestId, setDragOverRequestId] = useState(null); // drag-and-drop: ID being hovered over
+  const [preppedSongs, setPreppedSongs] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`votebeats_prepped_${id}`);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch { return new Set(); }
+  }); // set of request IDs marked as "Ready in Spotify"
+
+  // Collapsible sections state (persisted to localStorage)
+  const [collapsedSections, setCollapsedSections] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`votebeats_collapsed_${id}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  const toggleSection = (section) => {
+    setCollapsedSections(prev => {
+      const updated = { ...prev, [section]: !prev[section] };
+      try { localStorage.setItem(`votebeats_collapsed_${id}`, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
+
+  // Persist prepped songs to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(`votebeats_prepped_${id}`, JSON.stringify([...preppedSongs]));
+    } catch {}
+  }, [preppedSongs, id]);
 
   // Helper to format duration from milliseconds to mm:ss
   const formatDuration = (ms) => {
@@ -184,6 +215,7 @@ export default function EventManagePage() {
           songId,
           currentSong: npReq.song,
           nextSong: nextSong ? nextSong.song : null,
+          nextSongId: nextSong ? nextSong.id : null,
           nextSongSpotifyUrl: nextSong ? getSpotifySearchUrl(nextSong.song) : null,
           remainingSeconds: remainingSec,
         });
@@ -414,9 +446,16 @@ export default function EventManagePage() {
   function sortRequests(reqs) {
     const filtered = filterBySearch(reqs);
     return [...filtered].sort((a, b) => {
+      // When sorting by votes (default), prioritize manually ordered items first
+      if (queueSort === 'votes') {
+        const aHasOrder = a.manualOrder !== null && a.manualOrder !== undefined;
+        const bHasOrder = b.manualOrder !== null && b.manualOrder !== undefined;
+        if (aHasOrder && bHasOrder) return a.manualOrder - b.manualOrder;
+        if (aHasOrder && !bHasOrder) return -1;
+        if (!aHasOrder && bHasOrder) return 1;
+        return (b.voteCount || 0) - (a.voteCount || 0);
+      }
       switch (queueSort) {
-        case 'votes':
-          return (b.voteCount || 0) - (a.voteCount || 0);
         case 'time':
           return new Date(a.createdAt) - new Date(b.createdAt);
         case 'title':
@@ -439,6 +478,85 @@ export default function EventManagePage() {
     );
   }
 
+  // Drag-and-drop handlers for queue reordering
+  function handleDragStart(e, requestId) {
+    setDraggedRequestId(requestId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', requestId);
+    // Make the dragged element semi-transparent
+    if (e.target.closest('[data-drag-item]')) {
+      setTimeout(() => {
+        const el = e.target.closest('[data-drag-item]');
+        if (el) el.style.opacity = '0.4';
+      }, 0);
+    }
+  }
+
+  function handleDragOver(e, requestId) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (requestId !== dragOverRequestId) {
+      setDragOverRequestId(requestId);
+    }
+  }
+
+  function handleDragEnd(e) {
+    // Reset opacity
+    if (e.target.closest('[data-drag-item]')) {
+      e.target.closest('[data-drag-item]').style.opacity = '1';
+    }
+    setDraggedRequestId(null);
+    setDragOverRequestId(null);
+  }
+
+  async function handleDrop(e, targetRequestId) {
+    e.preventDefault();
+    setDragOverRequestId(null);
+    const sourceRequestId = draggedRequestId;
+    setDraggedRequestId(null);
+
+    // Reset opacity on all items
+    document.querySelectorAll('[data-drag-item]').forEach(el => el.style.opacity = '1');
+
+    if (!sourceRequestId || sourceRequestId === targetRequestId) return;
+
+    // Get current sorted order of queued requests
+    const sorted = sortRequests(queuedRequests);
+    const sourceIndex = sorted.findIndex(r => r.id === sourceRequestId);
+    const targetIndex = sorted.findIndex(r => r.id === targetRequestId);
+
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    // Create new order: remove source, insert at target position
+    const reordered = [...sorted];
+    const [moved] = reordered.splice(sourceIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    // Assign manual_order values (1-based)
+    const updates = reordered.map((r, i) => ({ id: r.id, manualOrder: i + 1 }));
+
+    // Optimistically update local state
+    setRequests(prev => {
+      const updated = [...prev];
+      for (const u of updates) {
+        const idx = updated.findIndex(r => r.id === u.id);
+        if (idx !== -1) {
+          updated[idx] = { ...updated[idx], manualOrder: u.manualOrder };
+        }
+      }
+      return updated;
+    });
+
+    // Persist to server (update all reordered items)
+    try {
+      await Promise.all(updates.map(u => api.updateRequestOrder(id, u.id, u.manualOrder)));
+    } catch (err) {
+      console.error('Failed to save order:', err);
+      // Reload to get server state on error
+      loadRequests();
+    }
+  }
+
   function getStatusBadge(s) {
     switch(s) {
       case 'active':
@@ -459,8 +577,28 @@ export default function EventManagePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-        <p className="text-slate-500">Loading event...</p>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-6" data-loading-skeleton>
+        <div className="max-w-6xl mx-auto">
+          <div className="animate-pulse space-y-4">
+            <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-1/3 mb-2" />
+            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/4 mb-6" />
+            <div className="flex gap-3 mb-6">
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="h-10 bg-slate-200 dark:bg-slate-700 rounded-lg w-24" />
+              ))}
+            </div>
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-4">
+                <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-lg flex-shrink-0" />
+                <div className="flex-1">
+                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-2/3 mb-2" />
+                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/3" />
+                </div>
+                <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-16" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -1048,11 +1186,12 @@ export default function EventManagePage() {
                               <Square className="w-5 h-5" />
                             )}
                           </button>
-                          <h4 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                          <button onClick={() => toggleSection('pending')} className="flex items-center gap-1 text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide hover:text-slate-700 dark:hover:text-slate-200 transition-colors" data-collapse-toggle="pending">
+                            <ChevronDown className={`w-4 h-4 transition-transform ${collapsedSections.pending ? '-rotate-90' : ''}`} />
                             Pending ({pendingRequests.length})
-                          </h4>
+                          </button>
                         </div>
-                        <div className="space-y-2">
+                        {!collapsedSections.pending && (<div className="space-y-2">
                           {sortRequests(pendingRequests).map(request => (
                             <div key={request.id}>
                               <div
@@ -1073,7 +1212,7 @@ export default function EventManagePage() {
                                   )}
                                 </button>
                                 {request.song?.albumArtUrl ? (
-                                  <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                                  <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover bg-slate-200 dark:bg-slate-700" loading="lazy" />
                                 ) : (
                                   <div className="w-10 h-10 rounded flex-shrink-0 bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
                                     <Music className="w-5 h-5 text-slate-400 dark:text-slate-500" />
@@ -1188,20 +1327,21 @@ export default function EventManagePage() {
                               )}
                             </div>
                           ))}
-                        </div>
+                        </div>)}
                       </div>
                     )}
 
                     {/* Now Playing */}
                     {nowPlayingRequest && (queueFilter === 'all' || queueFilter === 'nowPlaying') && filterBySearch([nowPlayingRequest]).length > 0 && (
                       <div className="mb-4">
-                        <h4 className="text-sm font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                        <button onClick={() => toggleSection('nowPlaying')} className="text-sm font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide mb-3 flex items-center gap-2 hover:text-green-700 dark:hover:text-green-300 transition-colors" data-collapse-toggle="nowPlaying">
+                          <ChevronDown className={`w-4 h-4 transition-transform ${collapsedSections.nowPlaying ? '-rotate-90' : ''}`} />
                           <Radio className="w-4 h-4 animate-pulse" />
                           Now Playing
-                        </h4>
-                        <div className="flex items-center gap-3 p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border-2 border-green-300 dark:border-green-700">
+                        </button>
+                        {!collapsedSections.nowPlaying && (<div className="flex items-center gap-3 p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border-2 border-green-300 dark:border-green-700">
                           {nowPlayingRequest.song?.albumArtUrl ? (
-                            <img src={nowPlayingRequest.song.albumArtUrl} alt="" className="w-12 h-12 rounded flex-shrink-0 object-cover" />
+                            <img src={nowPlayingRequest.song.albumArtUrl} alt="" className="w-12 h-12 rounded flex-shrink-0 object-cover bg-slate-200 dark:bg-slate-700" loading="lazy" />
                           ) : (
                             <div className="w-12 h-12 rounded flex-shrink-0 bg-green-200 dark:bg-green-800 flex items-center justify-center">
                               <Music className="w-6 h-6 text-green-500" />
@@ -1240,22 +1380,36 @@ export default function EventManagePage() {
                           >
                             Mark Played
                           </button>
-                        </div>
+                        </div>)}
                       </div>
                     )}
 
                     {/* Queued songs with Play button */}
                     {queuedRequests.length > 0 && (queueFilter === 'all' || queueFilter === 'queued') && (
                       <div className="mb-4">
-                        <h4 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                        <button onClick={() => toggleSection('upNext')} className="flex items-center gap-1 text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3 hover:text-slate-700 dark:hover:text-slate-200 transition-colors" data-collapse-toggle="upNext">
+                          <ChevronDown className={`w-4 h-4 transition-transform ${collapsedSections.upNext ? '-rotate-90' : ''}`} />
                           Up Next ({queuedRequests.length})
-                        </h4>
-                        <div className="space-y-2">
-                          {sortRequests(queuedRequests).map(request => (
-                            <div key={request.id}>
-                              <div className="flex items-center gap-3 p-3 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600">
+                        </button>
+                        {!collapsedSections.upNext && (<div className="space-y-2">
+                          {sortRequests(queuedRequests).map((request, index) => (
+                            <div
+                              key={request.id}
+                              data-drag-item={request.id}
+                              draggable="true"
+                              onDragStart={(e) => handleDragStart(e, request.id)}
+                              onDragOver={(e) => handleDragOver(e, request.id)}
+                              onDrop={(e) => handleDrop(e, request.id)}
+                              onDragEnd={handleDragEnd}
+                              className={dragOverRequestId === request.id && draggedRequestId !== request.id ? 'border-t-2 border-primary-500' : ''}
+                              style={{ cursor: 'grab' }}
+                            >
+                              <div className={`flex items-center gap-3 p-3 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 ${draggedRequestId === request.id ? 'opacity-40' : ''}`}>
+                                <div className="flex-shrink-0 cursor-grab text-slate-300 dark:text-slate-500 hover:text-slate-500 dark:hover:text-slate-300" title="Drag to reorder">
+                                  <GripVertical className="w-4 h-4" />
+                                </div>
                                 {request.song?.albumArtUrl ? (
-                                  <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                                  <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover bg-slate-200 dark:bg-slate-700" loading="lazy" />
                                 ) : (
                                   <div className="w-10 h-10 rounded flex-shrink-0 bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
                                     <Music className="w-5 h-5 text-slate-400 dark:text-slate-500" />
@@ -1352,24 +1506,25 @@ export default function EventManagePage() {
                               )}
                             </div>
                           ))}
-                        </div>
+                        </div>)}
                       </div>
                     )}
 
                     {/* Other requests (played/rejected shown here; queued/nowPlaying shown above) */}
                     {otherRequests.length > 0 && (queueFilter === 'all' || queueFilter === 'played' || queueFilter === 'rejected') && (
                       <div>
-                        <h4 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                        <button onClick={() => toggleSection('processed')} className="flex items-center gap-1 text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3 hover:text-slate-700 dark:hover:text-slate-200 transition-colors" data-collapse-toggle="processed">
+                          <ChevronDown className={`w-4 h-4 transition-transform ${collapsedSections.processed ? '-rotate-90' : ''}`} />
                           Processed ({queueFilter === 'played' ? playedRequests.length : queueFilter === 'rejected' ? rejectedRequests.length : otherRequests.length})
-                        </h4>
-                        <div className="space-y-2">
+                        </button>
+                        {!collapsedSections.processed && (<div className="space-y-2">
                           {sortRequests(queueFilter === 'played' ? playedRequests : queueFilter === 'rejected' ? rejectedRequests : otherRequests).map(request => (
                             <div
                               key={request.id}
                               className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 opacity-60"
                             >
                               {request.song?.albumArtUrl ? (
-                                <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                                <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover bg-slate-200 dark:bg-slate-700" loading="lazy" />
                               ) : (
                                 <div className="w-10 h-10 rounded flex-shrink-0 bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
                                   <Music className="w-5 h-5 text-slate-400 dark:text-slate-500" />
@@ -1410,7 +1565,7 @@ export default function EventManagePage() {
                               </span>
                             </div>
                           ))}
-                        </div>
+                        </div>)}
                       </div>
                     )}
                   </div>
@@ -1499,7 +1654,7 @@ export default function EventManagePage() {
                           )}
                         </button>
                         {request.song?.albumArtUrl ? (
-                          <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                          <img src={request.song.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover bg-slate-200 dark:bg-slate-700" loading="lazy" />
                         ) : (
                           <div className="w-10 h-10 rounded flex-shrink-0 bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
                             <Music className="w-5 h-5 text-slate-400 dark:text-slate-500" />
@@ -1623,6 +1778,27 @@ export default function EventManagePage() {
           {activeView === 'messages' && (
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
               <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">DJ Messages</h3>
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Quick Templates</p>
+                <div className="flex flex-wrap gap-2" data-message-templates>
+                  {[
+                    'We need more songs! Send your requests!',
+                    'Voting closes soon! Cast your votes now!',
+                    'Great job! The queue is looking awesome!',
+                    'Taking a short break. Be right back!',
+                    'Last call for song requests!',
+                  ].map((tmpl) => (
+                    <button
+                      key={tmpl}
+                      onClick={() => setNewDJMessage(tmpl)}
+                      className="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 hover:text-primary-600 dark:hover:text-primary-400 transition-colors border border-slate-200 dark:border-slate-600"
+                      data-message-template
+                    >
+                      {tmpl}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="mb-6">
                 <textarea
                   value={newDJMessage}
@@ -1663,23 +1839,596 @@ export default function EventManagePage() {
           )}
 
 
-          {activeView === 'prep' && (
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Prep Ahead</h3>
-              <p className="text-slate-500 dark:text-slate-400 text-center py-8">Prepare your setlist and cue songs ahead of time. Coming soon.</p>
-            </div>
-          )}
+          {activeView === 'prep' && (() => {
+            const nowPlaying = requests.find(r => r.status === 'nowPlaying');
+            const queuedSongs = [...requests.filter(r => r.status === 'queued')]
+              .sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0));
+            const prepSongs = queuedSongs.slice(0, 5);
+            const totalPrepMs = prepSongs.reduce((sum, r) => sum + (r.song?.durationMs || 0), 0);
+
+            return (
+              <div className="space-y-4" data-prep-view>
+                {/* Now Playing Banner */}
+                {nowPlaying && (
+                  <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl shadow-sm p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Radio className="w-4 h-4 text-white animate-pulse" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">Now Playing</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      {nowPlaying.song?.albumArtUrl ? (
+                        <img src={nowPlaying.song.albumArtUrl} alt="" className="w-14 h-14 rounded-lg shadow-md flex-shrink-0 object-cover bg-slate-200 dark:bg-slate-700" loading="lazy" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                          <Music className="w-7 h-7 text-white/70" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-lg font-bold text-white truncate">{nowPlaying.song?.title || 'Unknown'}</p>
+                        <p className="text-sm text-white/80 truncate">{nowPlaying.song?.artist || 'Unknown'}</p>
+                        {nowPlaying.song?.durationMs && (
+                          <p className="text-xs text-white/60 mt-1">{formatDuration(nowPlaying.song.durationMs)}</p>
+                        )}
+                      </div>
+                      <a
+                        href={getSpotifySearchUrl(nowPlaying.song)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                        title="Search on Spotify"
+                      >
+                        <ExternalLink className="w-4 h-4 text-white" />
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {/* Up Next Header */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white">Up Next</h3>
+                    <span className="text-sm text-slate-500 dark:text-slate-400">
+                      {prepSongs.length} of {queuedSongs.length} queued
+                    </span>
+                  </div>
+                  {totalPrepMs > 0 && (
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+                      Estimated time: {formatDuration(totalPrepMs)}
+                    </p>
+                  )}
+
+                  {prepSongs.length === 0 ? (
+                    <div className="text-center py-12">
+                      <ListMusic className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+                      <p className="text-slate-500 dark:text-slate-400 font-medium">No songs in the queue</p>
+                      <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Approve pending requests or wait for attendees to submit songs.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {prepSongs.map((request, index) => (
+                        <div
+                          key={request.id}
+                          className="flex items-center gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-600/50 hover:border-primary-200 dark:hover:border-primary-700 transition-colors"
+                          data-prep-song
+                        >
+                          {/* Position number */}
+                          <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center flex-shrink-0">
+                            <span className="text-sm font-bold text-primary-600 dark:text-primary-400">{index + 1}</span>
+                          </div>
+
+                          {/* Album Art */}
+                          {request.song?.albumArtUrl ? (
+                            <img src={request.song.albumArtUrl} alt="" className="w-14 h-14 rounded-lg shadow-sm flex-shrink-0 object-cover bg-slate-200 dark:bg-slate-700" loading="lazy" />
+                          ) : (
+                            <div className="w-14 h-14 rounded-lg bg-slate-200 dark:bg-slate-600 flex items-center justify-center flex-shrink-0">
+                              <Music className="w-7 h-7 text-slate-400 dark:text-slate-500" />
+                            </div>
+                          )}
+
+                          {/* Song Info */}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-slate-900 dark:text-white truncate">{request.song?.title || 'Unknown Song'}</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{request.song?.artist || 'Unknown Artist'}</p>
+                            <div className="flex items-center gap-3 mt-1">
+                              {request.song?.durationMs && (
+                                <span className="text-xs text-slate-400 dark:text-slate-500">{formatDuration(request.song.durationMs)}</span>
+                              )}
+                              <span className="text-xs text-primary-500 dark:text-primary-400 font-medium">
+                                {request.voteCount || 0} {(request.voteCount || 0) === 1 ? 'vote' : 'votes'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Prep Status Toggle */}
+                          <button
+                            onClick={() => setPreppedSongs(prev => {
+                              const next = new Set(prev);
+                              if (next.has(request.id)) {
+                                next.delete(request.id);
+                              } else {
+                                next.add(request.id);
+                              }
+                              return next;
+                            })}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 flex-shrink-0 ${
+                              preppedSongs.has(request.id)
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800'
+                                : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                            }`}
+                            data-prep-status={preppedSongs.has(request.id) ? 'ready' : 'not-prepped'}
+                          >
+                            {preppedSongs.has(request.id) ? '✅ Ready in Spotify' : '⚠️ Not prepped'}
+                          </button>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <a
+                              href={getSpotifySearchUrl(request.song)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                              title="Search on Spotify"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                            <button
+                              onClick={() => handleStatusChange(request.id, 'nowPlaying')}
+                              className="px-3 py-1.5 text-xs font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors flex items-center gap-1"
+                              title="Play Now"
+                            >
+                              <Play className="w-3 h-3" />
+                              Play
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {activeView === 'settings' && (
             <EventSettingsForm event={event} eventId={id} onSaved={(updated) => setEvent(updated)} />
           )}
 
-          {activeView === 'analytics' && (
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Event Analytics</h3>
-              <p className="text-slate-500 dark:text-slate-400">Analytics dashboard coming soon.</p>
-            </div>
-          )}
+          {activeView === 'analytics' && (() => {
+            // Compute analytics from existing requests data
+            const totalRequests = requests.length;
+            const pendingCount = requests.filter(r => r.status === 'pending').length;
+            const queuedCount = requests.filter(r => r.status === 'queued').length;
+            const nowPlayingCount = requests.filter(r => r.status === 'nowPlaying').length;
+            const playedCount = requests.filter(r => r.status === 'played').length;
+            const rejectedCount = requests.filter(r => r.status === 'rejected').length;
+            const approvedCount = queuedCount + nowPlayingCount + playedCount;
+            const totalVotes = requests.reduce((sum, r) => sum + (r.voteCount || 0), 0);
+            const avgVotes = totalRequests > 0 ? (totalVotes / totalRequests).toFixed(1) : '0';
+            const maxVotes = requests.length > 0 ? Math.max(...requests.map(r => r.voteCount || 0)) : 0;
+
+            // Total play duration (played + nowPlaying songs)
+            const playedSongs = requests.filter(r => r.status === 'played' || r.status === 'nowPlaying');
+            const totalPlayMs = playedSongs.reduce((sum, r) => sum + (r.song?.durationMs || r.durationMs || 0), 0);
+            const totalPlayMin = Math.floor(totalPlayMs / 60000);
+            const totalPlaySec = Math.floor((totalPlayMs % 60000) / 1000);
+
+            // Top 5 most voted songs
+            const topSongs = [...requests].sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0)).slice(0, 5);
+
+            // Artist frequency
+            const artistCounts = {};
+            requests.forEach(r => {
+              const artist = r.song?.artist || r.artist || r.artistName || 'Unknown';
+              artistCounts[artist] = (artistCounts[artist] || 0) + 1;
+            });
+            const topArtists = Object.entries(artistCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+            // Status distribution for bar chart
+            const statusData = [
+              { label: 'Played', count: playedCount, color: 'bg-green-500', textColor: 'text-green-600 dark:text-green-400' },
+              { label: 'Now Playing', count: nowPlayingCount, color: 'bg-blue-500', textColor: 'text-blue-600 dark:text-blue-400' },
+              { label: 'Queued', count: queuedCount, color: 'bg-purple-500', textColor: 'text-purple-600 dark:text-purple-400' },
+              { label: 'Pending', count: pendingCount, color: 'bg-amber-500', textColor: 'text-amber-600 dark:text-amber-400' },
+              { label: 'Rejected', count: rejectedCount, color: 'bg-red-500', textColor: 'text-red-600 dark:text-red-400' },
+            ];
+            const maxStatusCount = Math.max(...statusData.map(s => s.count), 1);
+
+            // Unique requesters
+            const uniqueRequesters = new Set(requests.map(r => r.requestedBy?.userId || r.requestedBy)).size;
+
+            // Songs with dedications/messages
+            const withMessages = requests.filter(r => r.message && r.message.trim()).length;
+
+            // Peak request times - group by hour
+            const hourCounts = {};
+            requests.forEach(r => {
+              const ts = r.createdAt || r.created_at;
+              if (ts) {
+                const d = new Date(ts.includes('T') ? ts : ts + 'Z');
+                const hour = d.getHours();
+                hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+              }
+            });
+            const hourEntries = Object.entries(hourCounts)
+              .map(([h, c]) => ({ hour: parseInt(h), count: c }))
+              .sort((a, b) => a.hour - b.hour);
+            const maxHourCount = hourEntries.length > 0 ? Math.max(...hourEntries.map(e => e.count)) : 1;
+            const peakHour = hourEntries.length > 0 ? hourEntries.reduce((a, b) => b.count > a.count ? b : a) : null;
+            const formatHour = (h) => {
+              const ampm = h >= 12 ? 'PM' : 'AM';
+              const h12 = h % 12 || 12;
+              return `${h12}${ampm}`;
+            };
+
+            // Most active participants - group by requestedBy userId
+            const participantMap = {};
+            requests.forEach(r => {
+              const userId = r.requestedBy?.userId || r.requestedBy || 'unknown';
+              const nickname = r.requestedBy?.nickname || r.nickname || null;
+              if (!participantMap[userId]) {
+                participantMap[userId] = { userId, nickname, requestCount: 0 };
+              }
+              participantMap[userId].requestCount += 1;
+              // Update nickname to the latest one
+              if (nickname) participantMap[userId].nickname = nickname;
+            });
+            const topParticipants = Object.values(participantMap)
+              .sort((a, b) => b.requestCount - a.requestCount)
+              .slice(0, 5);
+
+            // Diversity metrics
+            const uniqueArtists = new Set(requests.map(r => r.song?.artist || r.artistName || 'Unknown')).size;
+            const artistDiversity = totalRequests > 0 ? Math.round((uniqueArtists / totalRequests) * 100) : 0;
+
+            // Genre breakdown
+            const genreCounts = {};
+            requests.forEach(r => {
+              const genre = r.song?.genre || r.genre || null;
+              if (genre) {
+                genreCounts[genre] = (genreCounts[genre] || 0) + 1;
+              }
+            });
+            const topGenres = Object.entries(genreCounts).sort((a, b) => b[1] - a[1]);
+            const maxGenreCount = topGenres.length > 0 ? topGenres[0][1] : 1;
+            const topGenreName = topGenres.length > 0 ? topGenres[0][0] : null;
+
+            // CSV export function
+            const exportCSV = () => {
+              const headers = ['Song Title', 'Artist', 'Genre', 'Status', 'Votes', 'Requester', 'Nickname', 'Message', 'Duration (ms)', 'Explicit', 'Created At', 'Updated At'];
+              const rows = requests.map(r => [
+                r.song?.title || r.songTitle || '',
+                r.song?.artist || r.artistName || '',
+                r.song?.genre || '',
+                r.status || '',
+                r.voteCount || 0,
+                r.requestedBy?.userId || r.requestedBy || '',
+                r.requestedBy?.nickname || r.nickname || '',
+                (r.message || '').replace(/"/g, '""'),
+                r.song?.durationMs || r.durationMs || '',
+                r.song?.explicitFlag ? 'Yes' : 'No',
+                r.createdAt || '',
+                r.updatedAt || '',
+              ]);
+              const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `${(event?.name || 'event').replace(/[^a-z0-9]/gi, '_')}_requests.csv`;
+              link.click();
+              URL.revokeObjectURL(url);
+            };
+
+            return (
+              <div className="space-y-6" data-analytics-dashboard>
+                {/* Header */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <BarChart3 className="w-6 h-6 text-primary-500" />
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white">Event Analytics</h3>
+                    </div>
+                    <button
+                      onClick={exportCSV}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-lg transition-colors"
+                      data-export-csv
+                    >
+                      <Download className="w-4 h-4" />
+                      Export CSV
+                    </button>
+                  </div>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Overview of {event?.name || 'your event'} activity and engagement
+                  </p>
+                </div>
+
+                {/* Key Metrics Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-analytics-metrics>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Requests</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1" data-stat="total-requests">{totalRequests}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{approvedCount} approved</p>
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Votes</p>
+                    <p className="text-3xl font-bold text-primary-600 dark:text-primary-400 mt-1" data-stat="total-votes">{totalVotes}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{avgVotes} avg per song</p>
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Songs Played</p>
+                    <p className="text-3xl font-bold text-green-600 dark:text-green-400 mt-1" data-stat="songs-played">{playedCount}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{totalPlayMin}m {totalPlaySec}s total</p>
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Unique Attendees</p>
+                    <p className="text-3xl font-bold text-violet-600 dark:text-violet-400 mt-1" data-stat="unique-attendees">{uniqueRequesters}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{withMessages} with dedications</p>
+                  </div>
+                </div>
+
+                {/* Status Distribution */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6" data-analytics-status>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-wide">Request Status Distribution</h4>
+                  <div className="space-y-3">
+                    {statusData.map(item => (
+                      <div key={item.label} className="flex items-center gap-3">
+                        <span className={`text-xs font-medium w-24 text-right ${item.textColor}`}>{item.label}</span>
+                        <div className="flex-1 bg-slate-100 dark:bg-slate-700 rounded-full h-6 overflow-hidden">
+                          <div
+                            className={`${item.color} h-full rounded-full flex items-center justify-end pr-2 transition-all duration-500`}
+                            style={{ width: `${Math.max((item.count / maxStatusCount) * 100, item.count > 0 ? 8 : 0)}%` }}
+                          >
+                            {item.count > 0 && <span className="text-xs font-bold text-white">{item.count}</span>}
+                          </div>
+                        </div>
+                        {item.count === 0 && <span className="text-xs text-slate-400">0</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Peak Request Times */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6" data-analytics-peak-times>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-wide">⏰ Peak Request Times</h4>
+                  {hourEntries.length === 0 ? (
+                    <p className="text-sm text-slate-400 dark:text-slate-500">No request timing data available.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {hourEntries.map(entry => (
+                        <div key={entry.hour} className="flex items-center gap-3">
+                          <span className={`text-xs font-mono font-medium w-12 text-right ${peakHour && entry.hour === peakHour.hour ? 'text-primary-600 dark:text-primary-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
+                            {formatHour(entry.hour)}
+                          </span>
+                          <div className="flex-1 bg-slate-100 dark:bg-slate-700 rounded-full h-5 overflow-hidden">
+                            <div
+                              className={`${peakHour && entry.hour === peakHour.hour ? 'bg-primary-500' : 'bg-indigo-400 dark:bg-indigo-500'} h-full rounded-full flex items-center justify-end pr-2 transition-all duration-500`}
+                              style={{ width: `${Math.max((entry.count / maxHourCount) * 100, 10)}%` }}
+                            >
+                              <span className="text-xs font-bold text-white">{entry.count}</span>
+                            </div>
+                          </div>
+                          {peakHour && entry.hour === peakHour.hour && (
+                            <span className="text-xs font-bold text-primary-600 dark:text-primary-400">PEAK</span>
+                          )}
+                        </div>
+                      ))}
+                      {peakHour && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                          Peak hour: <span className="font-bold text-primary-600 dark:text-primary-400">{formatHour(peakHour.hour)}</span> with {peakHour.count} {peakHour.count === 1 ? 'request' : 'requests'}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Two Column Layout */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Top Voted Songs */}
+                  <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6" data-analytics-top-songs>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-wide">🏆 Top Voted Songs</h4>
+                    {topSongs.length === 0 ? (
+                      <p className="text-sm text-slate-400 dark:text-slate-500">No songs yet</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {topSongs.map((song, i) => (
+                          <div key={song.id} className="flex items-center gap-3">
+                            <span className={`text-lg font-bold w-6 text-center ${i === 0 ? 'text-amber-500' : i === 1 ? 'text-slate-400' : i === 2 ? 'text-orange-600' : 'text-slate-300 dark:text-slate-600'}`}>
+                              {i + 1}
+                            </span>
+                            {(song.song?.albumArtUrl || song.albumArtUrl) && (
+                              <img src={song.song?.albumArtUrl || song.albumArtUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-slate-200 dark:bg-slate-700" loading="lazy" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{song.song?.title || song.songTitle || 'Unknown'}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{song.song?.artist || song.artistName || 'Unknown'}</p>
+                            </div>
+                            <div className="flex items-center gap-1 text-primary-600 dark:text-primary-400">
+                              <span className="text-sm font-bold">{song.voteCount || 0}</span>
+                              <span className="text-xs">votes</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Top Artists */}
+                  <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6" data-analytics-top-artists>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-wide">🎤 Most Requested Artists</h4>
+                    {topArtists.length === 0 ? (
+                      <p className="text-sm text-slate-400 dark:text-slate-500">No requests yet</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {topArtists.map(([artist, count], i) => (
+                          <div key={artist} className="flex items-center gap-3">
+                            <span className={`text-lg font-bold w-6 text-center ${i === 0 ? 'text-amber-500' : i === 1 ? 'text-slate-400' : i === 2 ? 'text-orange-600' : 'text-slate-300 dark:text-slate-600'}`}>
+                              {i + 1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{artist}</p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{count}</span>
+                              <span className="text-xs text-slate-400">{count === 1 ? 'song' : 'songs'}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Genre Breakdown */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6" data-analytics-genres>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-wide">🎵 Genre Breakdown</h4>
+                  {topGenres.length === 0 ? (
+                    <p className="text-sm text-slate-400 dark:text-slate-500">No genre data available. Genres are captured from iTunes metadata when songs are requested.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {topGenres.map(([genre, count], i) => (
+                        <div key={genre} className="flex items-center gap-3">
+                          <span className={`text-xs font-medium w-28 text-right truncate ${i === 0 ? 'text-primary-600 dark:text-primary-400 font-bold' : 'text-slate-600 dark:text-slate-300'}`}>
+                            {genre}{i === 0 ? ' ⭐' : ''}
+                          </span>
+                          <div className="flex-1 bg-slate-100 dark:bg-slate-700 rounded-full h-6 overflow-hidden">
+                            <div
+                              className={`${i === 0 ? 'bg-primary-500' : 'bg-slate-400 dark:bg-slate-500'} h-full rounded-full flex items-center justify-end pr-2 transition-all duration-500`}
+                              style={{ width: `${Math.max((count / maxGenreCount) * 100, 8)}%` }}
+                            >
+                              <span className="text-xs font-bold text-white">{count}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {topGenreName && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                          Most popular genre: <span className="font-bold text-primary-600 dark:text-primary-400">{topGenreName}</span> ({topGenres[0][1]} {topGenres[0][1] === 1 ? 'request' : 'requests'})
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Most Active Participants */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6" data-analytics-participants>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-wide">👥 Most Active Participants</h4>
+                  {topParticipants.length === 0 ? (
+                    <p className="text-sm text-slate-400 dark:text-slate-500">No participant data available.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {topParticipants.map((p, i) => (
+                        <div key={p.userId} className="flex items-center gap-3" data-participant>
+                          <span className={`text-lg font-bold w-6 text-center ${i === 0 ? 'text-amber-500' : i === 1 ? 'text-slate-400' : i === 2 ? 'text-orange-600' : 'text-slate-300 dark:text-slate-600'}`}>
+                            {i + 1}
+                          </span>
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                            {(p.nickname || 'A')[0].toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate" data-participant-name>
+                              {p.nickname || 'Anonymous Attendee'}
+                            </p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{p.requestCount}</span>
+                            <span className="text-xs text-slate-400 ml-1">{p.requestCount === 1 ? 'request' : 'requests'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Song Diversity Metrics */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6" data-analytics-diversity>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-wide">🌈 Song Diversity</h4>
+                  {totalRequests === 0 ? (
+                    <p className="text-sm text-slate-400 dark:text-slate-500">No song data to analyze.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Genre Diversity */}
+                        <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg border border-purple-100 dark:border-purple-800" data-diversity-genre>
+                          <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{topGenres.length}</p>
+                          <p className="text-xs font-semibold text-purple-500 dark:text-purple-400 mt-1">Unique Genres</p>
+                          <div className="mt-2 bg-purple-100 dark:bg-purple-900/40 rounded-full h-2 overflow-hidden">
+                            <div className="bg-purple-500 h-full rounded-full" style={{ width: `${Math.min(topGenres.length * 20, 100)}%` }} />
+                          </div>
+                        </div>
+                        {/* Artist Variety */}
+                        <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg border border-blue-100 dark:border-blue-800" data-diversity-artist>
+                          <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{uniqueArtists}</p>
+                          <p className="text-xs font-semibold text-blue-500 dark:text-blue-400 mt-1">Unique Artists</p>
+                          <div className="mt-2 bg-blue-100 dark:bg-blue-900/40 rounded-full h-2 overflow-hidden">
+                            <div className="bg-blue-500 h-full rounded-full" style={{ width: `${artistDiversity}%` }} />
+                          </div>
+                        </div>
+                        {/* Overall Diversity Score */}
+                        <div className="text-center p-4 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800">
+                          <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{artistDiversity}%</p>
+                          <p className="text-xs font-semibold text-emerald-500 dark:text-emerald-400 mt-1">Artist Variety Score</p>
+                          <div className="mt-2 bg-emerald-100 dark:bg-emerald-900/40 rounded-full h-2 overflow-hidden">
+                            <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${artistDiversity}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                      {/* Diversity Insight */}
+                      <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg" data-diversity-insight>
+                        <p className="text-xs text-slate-600 dark:text-slate-300">
+                          <span className="font-bold">💡 Insight:</span>{' '}
+                          {artistDiversity >= 80
+                            ? 'Excellent variety! Your audience requested a very diverse mix of artists.'
+                            : artistDiversity >= 50
+                            ? 'Good variety! A healthy mix of different artists in the queue.'
+                            : artistDiversity >= 30
+                            ? 'Moderate variety. Some artists were requested multiple times.'
+                            : 'Low variety. The audience focused on a few favorite artists.'}
+                          {topGenres.length >= 4
+                            ? ` Genre-wise, a great spread across ${topGenres.length} genres shows eclectic taste.`
+                            : topGenres.length >= 2
+                            ? ` ${topGenres.length} genres represented — a decent range of musical styles.`
+                            : topGenres.length === 1
+                            ? ` All songs fell into one genre (${topGenres[0][0]}).`
+                            : ''}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Additional Stats */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6" data-analytics-extra>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-wide">📊 Quick Stats</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="text-center p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                      <p className="text-2xl font-bold text-slate-900 dark:text-white">{maxVotes}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Most votes on a song</p>
+                    </div>
+                    <div className="text-center p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                      <p className="text-2xl font-bold text-slate-900 dark:text-white">{avgVotes}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Avg votes per song</p>
+                    </div>
+                    <div className="text-center p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                      <p className="text-2xl font-bold text-slate-900 dark:text-white">{totalRequests > 0 ? Math.round((approvedCount / totalRequests) * 100) : 0}%</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Approval rate</p>
+                    </div>
+                    <div className="text-center p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                      <p className="text-2xl font-bold text-slate-900 dark:text-white">{rejectedCount}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Songs rejected</p>
+                    </div>
+                    <div className="text-center p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                      <p className="text-2xl font-bold text-slate-900 dark:text-white">{withMessages}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Songs with dedications</p>
+                    </div>
+                    <div className="text-center p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                      <p className="text-2xl font-bold text-slate-900 dark:text-white">{djMessages.length}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">DJ messages sent</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </main>
       </div>
 
@@ -1708,7 +2457,7 @@ export default function EventManagePage() {
                 <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide font-semibold mb-2">Up Next</p>
                 <div className="flex items-center gap-3">
                   {songEndingAlert.nextSong.albumArtUrl ? (
-                    <img src={songEndingAlert.nextSong.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                    <img src={songEndingAlert.nextSong.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover bg-slate-200 dark:bg-slate-700" loading="lazy" />
                   ) : (
                     <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
                       <Music className="w-5 h-5 text-slate-400" />
@@ -1724,6 +2473,16 @@ export default function EventManagePage() {
                     </p>
                   </div>
                 </div>
+                {/* Prep reminder for unprepped next song */}
+                {songEndingAlert.nextSongId && !preppedSongs.has(songEndingAlert.nextSongId) && (
+                  <div className="mt-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg" data-prep-reminder>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">⚠️</span>
+                      <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">Not prepped yet!</span>
+                    </div>
+                    <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">Open in Spotify and add to queue, then mark as ready.</p>
+                  </div>
+                )}
                 {songEndingAlert.nextSongSpotifyUrl && (
                   <a
                     href={songEndingAlert.nextSongSpotifyUrl}
@@ -1734,6 +2493,19 @@ export default function EventManagePage() {
                     <ExternalLink className="w-3.5 h-3.5" />
                     Open in Spotify
                   </a>
+                )}
+                {songEndingAlert.nextSongId && !preppedSongs.has(songEndingAlert.nextSongId) && (
+                  <button
+                    onClick={() => setPreppedSongs(prev => {
+                      const next = new Set(prev);
+                      next.add(songEndingAlert.nextSongId);
+                      return next;
+                    })}
+                    className="mt-2 flex items-center justify-center gap-2 w-full px-3 py-2 bg-primary-500 hover:bg-primary-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                    data-mark-prepped-from-alert
+                  >
+                    ✅ Mark as Prepped
+                  </button>
                 )}
               </>
             ) : (
@@ -1774,7 +2546,7 @@ export default function EventManagePage() {
               </div>
               <div className="p-4 flex items-center gap-3">
                 {toast.albumArtUrl ? (
-                  <img src={toast.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                  <img src={toast.albumArtUrl} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover bg-slate-200 dark:bg-slate-700" loading="lazy" />
                 ) : (
                   <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
                     <Music className="w-5 h-5 text-slate-400" />
