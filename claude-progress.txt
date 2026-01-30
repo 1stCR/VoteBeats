@@ -1,5 +1,44 @@
 ===== VoteBeats Development Progress =====
 
+=== Session: 2026-01-30 (Session 49) ===
+Status: 255/255 features passing (100%)
+
+REGRESSION TESTING:
+- Feature #47 (Song request persists after page refresh): PASSED
+  - Registered DJ account (regtest_s49@test.com / DJ Regression49)
+  - Created event "Regression Test Dance S49" with location "Test Venue S49"
+  - Submitted "Bohemian Rhapsody" by Queen as attendee
+  - Refreshed page - navigated to "My Requests" tab
+  - Request still visible: "Bohemian Rhapsody" by Queen, "In Queue", 0 votes, Rank #1
+  - Navigated to DJ manage queue - same request visible with correct details (5:55 duration)
+  - Zero JavaScript errors
+
+- Feature #130 (Queue time management: visual timeline bar): PASSED
+  - Added 3 songs to queue: Bohemian Rhapsody (5:55), Shake It Off (3:39), Happy (3:53)
+  - Timeline bar shows "Queue: 13:27 (3 songs)" with green progress bar
+  - "3 songs with duration data" displayed correctly
+  - Visual timeline bar visible in screenshot
+  - Zero JavaScript errors
+
+- Feature #80 (Voting schedule: open immediately or scheduled): PASSED
+  - Settings page shows Voting Schedule with "Open immediately" (default, checked) and "Scheduled" radio options
+  - Attendees could vote immediately with default setting
+  - Clicked "Scheduled" - datetime input field appeared for scheduling
+  - Switched back to "Open immediately" - datetime field disappeared
+  - Voting Close section also has Manual/Scheduled options with "Close Voting Now" button
+  - Zero JavaScript errors
+
+ALL REGRESSION TESTS PASSED. No regressions found.
+
+CODE CHANGES:
+- None (regression testing only, no code modifications)
+
+NEXT SESSION:
+- All web-implementable features have been completed
+- 255/255 features passing (100%)
+- App is stable with zero regressions across 49 sessions
+- The web app is feature-complete
+
 === Session: 2026-01-30 (Session 48) ===
 Status: 255/255 features passing (100%)
 
