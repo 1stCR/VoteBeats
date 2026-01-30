@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Music, Search, Send, ThumbsUp, ListMusic, User, Link2, Flame, Clock, AlertTriangle } from 'lucide-react';
+import { Music, Search, Send, ThumbsUp, ListMusic, User, Link2, Flame, Clock, AlertTriangle, Bell, BellOff } from 'lucide-react';
 import { api } from '../config/api';
 
 function generateUUID() {
@@ -44,7 +44,13 @@ export default function EventPublicPage() {
   const [votingCountdown, setVotingCountdown] = useState(null);
   const [votingOpenCountdown, setVotingOpenCountdown] = useState(null);
   const [voteError, setVoteError] = useState('');
-  const [similarSongDialog, setSimilarSongDialog] = useState(null); // { song, matches }
+  const [similarSongDialog, setSimilarSongDialog] = useState(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    return localStorage.getItem('votebeats_notifications') === 'enabled' && 'Notification' in window && Notification.permission === 'granted';
+  });
+  const notifiedMessageIdsRef = useRef(new Set()); // { song, matches }
+  const notificationsEnabledRef = useRef(notificationsEnabled);
+  useEffect(() => { notificationsEnabledRef.current = notificationsEnabled; }, [notificationsEnabled]);
 
   // Helper to format time diff
   const formatTimeDiff = (diff) => {
@@ -56,6 +62,19 @@ export default function EventPublicPage() {
     if (hours > 0) return hours + 'h ' + minutes + 'm ' + seconds + 's';
     return minutes + 'm ' + seconds + 's';
   };
+
+  // Show browser notification for DJ message
+  function showMessageNotification(msg) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    try {
+      new Notification('DJ Announcement' + (event?.name ? ' - ' + event.name : ''), {
+        body: msg.content,
+        icon: '/favicon.ico',
+        tag: 'votebeats-msg-' + msg.id,
+        requireInteraction: false
+      });
+    } catch (e) { /* ignore notification errors */ }
+  }
 
   // Countdown timer for voting open
   useEffect(() => {
@@ -157,6 +176,15 @@ export default function EventPublicPage() {
       try {
         const msgs = await api.getEventMessages(eventId, attendeeId);
         setDjAnnouncements(msgs);
+        // Trigger browser notifications for new messages
+        if (notificationsEnabledRef.current && msgs && msgs.length > 0) {
+          for (const msg of msgs) {
+            if (!notifiedMessageIdsRef.current.has(msg.id)) {
+              showMessageNotification(msg);
+              notifiedMessageIdsRef.current.add(msg.id);
+            }
+          }
+        }
         // Auto-mark displayed messages as read
         for (const msg of (msgs || [])) {
           try {
@@ -204,6 +232,12 @@ export default function EventPublicPage() {
       try {
         const msgs = await api.getEventMessages(eventId, attendeeId);
         setDjAnnouncements(msgs);
+        // Seed notified IDs so we don't notify for pre-existing messages
+        if (msgs && msgs.length > 0) {
+          for (const msg of msgs) {
+            notifiedMessageIdsRef.current.add(msg.id);
+          }
+        }
         // Auto-mark displayed messages as read
         for (const msg of (msgs || [])) {
           try {
@@ -353,6 +387,36 @@ export default function EventPublicPage() {
     }
   }
 
+  async function handleToggleNotifications() {
+    if (notificationsEnabled) {
+      setNotificationsEnabled(false);
+      localStorage.setItem('votebeats_notifications', 'disabled');
+      return;
+    }
+    if (!('Notification' in window)) {
+      alert('Your browser does not support notifications.');
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        setNotificationsEnabled(true);
+        localStorage.setItem('votebeats_notifications', 'enabled');
+        // Show a test notification
+        new Notification('VoteBeats Notifications Enabled', {
+          body: 'You will be notified of DJ announcements.',
+          icon: '/favicon.ico',
+          tag: 'votebeats-test'
+        });
+      } else {
+        alert('Notification permission was denied. Please enable notifications in your browser settings.');
+      }
+    } catch (e) {
+      alert('Failed to enable notifications: ' + (e.message || 'Unknown error'));
+    }
+  }
+
+
   const myRequests = requests.filter(r => r.requestedBy?.userId === attendeeId);
   const myVotes = requests.filter(r => r.votedByUser && r.requestedBy?.userId !== attendeeId);
 
@@ -452,6 +516,14 @@ export default function EventPublicPage() {
           <div className="flex items-center justify-center gap-2 mb-2">
             <Music className="w-6 h-6" />
             <span className="text-sm font-medium opacity-80">VoteBeats</span>
+            <button
+              onClick={handleToggleNotifications}
+              className="ml-2 p-1 rounded-full hover:bg-white/20 transition-colors"
+              title={notificationsEnabled ? 'Disable notifications' : 'Enable notifications'}
+              data-notifications-toggle
+            >
+              {notificationsEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4 opacity-60" />}
+            </button>
           </div>
           <h1 className="text-2xl font-bold">{event.name}</h1>
                 {event.status === 'completed' && (
