@@ -150,6 +150,26 @@ export default function EventPublicPage() {
     return () => clearInterval(pollInterval);
   }, [eventId, loading, fetchRequests, fetchEvent]);
 
+  // Poll for new DJ messages/notifications (every 15 seconds)
+  useEffect(() => {
+    if (!eventId || loading) return;
+    const msgPollInterval = setInterval(async () => {
+      try {
+        const msgs = await api.getEventMessages(eventId, attendeeId);
+        setDjAnnouncements(msgs);
+        // Auto-mark displayed messages as read
+        for (const msg of (msgs || [])) {
+          try {
+            await api.markMessageRead(eventId, msg.id, attendeeId);
+          } catch (e) { /* ignore read-tracking errors */ }
+        }
+      } catch (err) {
+        // Silently fail on message poll errors
+      }
+    }, 15000); // Poll every 15 seconds for new messages
+    return () => clearInterval(msgPollInterval);
+  }, [eventId, loading, attendeeId]);
+
   // Resolve code word to linked attendee ID
   useEffect(() => {
     if (codeWord && codeWord.length >= 3) {

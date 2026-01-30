@@ -1,5 +1,59 @@
 ===== VoteBeats Development Progress =====
 
+=== Session: 2026-01-30 (Session 22) ===
+Status: 218/255 features passing (85.5%)
+
+FEATURES IMPLEMENTED THIS SESSION:
+- Feature #166: Automated trigger: vote window closing soon - PASSED
+  - Added checkVoteCloseAndNotify(eventId) function in server/routes/requests.js
+  - New message types: 'auto_vote_close_24h' and 'auto_vote_close_1h'
+  - 24h notification: triggered when 1-24 hours remaining (12-hour cooldown)
+  - 1h notification: triggered when ≤1 hour remaining (30-minute cooldown)
+  - Special "LAST CALL" message when ≤5 minutes remaining
+  - Called from /events/:eventId/public endpoint on each poll
+  - Added message polling (15s interval) on EventPublicPage.js
+  - Verified: 1h notification (28min), 24h notification (19h), cooldown prevents duplicates
+  - Zero app console errors
+
+- Feature #167: Automated trigger: event starting soon - PASSED
+  - Added checkEventStartAndNotify(eventId) function in server/routes/requests.js
+  - Combines event date + start_time to calculate event start datetime
+  - New message types: 'auto_event_start_24h' and 'auto_event_start_1h'
+  - 24h notification: triggered when event starts in 1-24 hours (12-hour cooldown)
+  - 1h notification: triggered when event starts within 1 hour (30-minute cooldown)
+  - Different messages for >10min vs ≤10min before start
+  - Called from /events/:eventId/public endpoint on each poll
+  - Verified: 24h notification (8h), 1h notification (30min), both show as DJ Announcements
+  - Zero app console errors
+
+- Feature #199: Export queue backup as PDF - PASSED
+  - Already implemented via exportPDF() in EventManagePage.js (Feature #212)
+  - Verified Export PDF button visible on Analytics tab
+
+CODE CHANGES:
+1. server/routes/requests.js - Added checkVoteCloseAndNotify() + checkEventStartAndNotify() + calls in public endpoint
+2. client/src/pages/EventPublicPage.js - Added 15-second message polling useEffect
+
+REGRESSION CHECK:
+- Feature #34 (Public event URL): PASSED
+- Feature #70 (Create event): PASSED
+- Feature #78 (Request limits): PASSED
+- Queue management, DJ messages, settings all working
+- Zero app console errors
+
+SKIPPED FEATURES (37 remaining - not implementable/testable):
+- Desktop Helper/Electron: #151-153, #177-195, #200-203 (~23 features)
+- Spotify OAuth Integration: #169, #171-174, #176, #197 (~7 features)
+- Push Notifications/FCM: #163 (no FCM infrastructure)
+- Firebase-specific: #228 (using SQLite, not Firebase)
+- Browser-specific: #233 (Safari), #234 (Firefox)
+
+NEXT SESSION:
+- All web-implementable features have been completed
+- 218/255 features passing (85.5%)
+- 37 remaining features require external dependencies (Electron, Spotify, FCM, Safari/Firefox)
+- App is stable with no regressions
+
 === Session: 2026-01-30 (Session 21) ===
 Status: 215/255 features passing (84.3%)
 

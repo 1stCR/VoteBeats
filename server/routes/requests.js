@@ -50,6 +50,146 @@ function checkQueueHealthAndNotify(eventId) {
   }
 }
 
+// Helper: Check vote window close time and auto-generate notifications at 24hr and 1hr before close
+function checkVoteCloseAndNotify(eventId) {
+  try {
+    const event = db.prepare('SELECT id, dj_id, settings FROM events WHERE id = ?').get(eventId);
+    if (!event) return;
+
+    const settings = JSON.parse(event.settings || '{}');
+
+    // Only applies to scheduled vote close mode with a close time set
+    if (settings.votingCloseMode !== 'scheduled' || !settings.votingCloseTime) return;
+    // If voting is already manually closed, no need for notifications
+    if (settings.votingClosed) return;
+
+    const now = Date.now();
+    const closeTime = new Date(settings.votingCloseTime).getTime();
+    const diff = closeTime - now;
+
+    // If voting already closed (past the time), no notification needed
+    if (diff <= 0) return;
+
+    const ONE_HOUR = 60 * 60 * 1000;
+    const TWENTY_FOUR_HOURS = 24 * ONE_HOUR;
+
+    // Check for 24-hour notification (between 1hr and 24hrs remaining)
+    if (diff <= TWENTY_FOUR_HOURS && diff > ONE_HOUR) {
+      // Check if we already sent a 24hr notification (12-hour cooldown)
+      const recent24h = db.prepare(
+        "SELECT id FROM messages WHERE event_id = ? AND type = 'auto_vote_close_24h' AND created_at > datetime('now', '-720 minutes')"
+      ).get(eventId);
+
+      if (!recent24h) {
+        const hoursLeft = Math.ceil(diff / ONE_HOUR);
+        const messageId = uuidv4();
+        const content = `⏰ Voting closes in ${hoursLeft} hour${hoursLeft === 1 ? '' : 's'}! Make sure to vote on your favorite songs and submit any last requests!`;
+
+        db.prepare(`
+          INSERT INTO messages (id, event_id, dj_id, content, target_audience, type)
+          VALUES (?, ?, ?, ?, 'all', 'auto_vote_close_24h')
+        `).run(messageId, eventId, event.dj_id, content);
+
+        console.log(`[Auto] Vote close 24h notification sent for event ${eventId} (${hoursLeft}h remaining)`);
+      }
+    }
+
+    // Check for 1-hour notification (1 hour or less remaining)
+    if (diff <= ONE_HOUR) {
+      // Check if we already sent a 1hr notification (30-minute cooldown)
+      const recent1h = db.prepare(
+        "SELECT id FROM messages WHERE event_id = ? AND type = 'auto_vote_close_1h' AND created_at > datetime('now', '-30 minutes')"
+      ).get(eventId);
+
+      if (!recent1h) {
+        const minutesLeft = Math.ceil(diff / (60 * 1000));
+        const messageId = uuidv4();
+        const content = minutesLeft <= 5
+          ? `🚨 LAST CALL! Voting closes in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}! Get your final votes in NOW!`
+          : `⏰ Voting closes in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}! Don't miss your chance — vote and request songs now!`;
+
+        db.prepare(`
+          INSERT INTO messages (id, event_id, dj_id, content, target_audience, type)
+          VALUES (?, ?, ?, ?, 'all', 'auto_vote_close_1h')
+        `).run(messageId, eventId, event.dj_id, content);
+
+        console.log(`[Auto] Vote close 1h notification sent for event ${eventId} (${minutesLeft}min remaining)`);
+      }
+    }
+  } catch (err) {
+    console.error('Vote close notification check error:', err);
+  }
+}
+
+// Helper: Check event start time and auto-generate "starting soon" notification
+function checkEventStartAndNotify(eventId) {
+  try {
+    const event = db.prepare('SELECT id, dj_id, date, start_time, settings FROM events WHERE id = ?').get(eventId);
+    if (!event) return;
+
+    // Need both date and start_time to calculate when event starts
+    if (!event.date || !event.start_time) return;
+
+    // Combine date and start_time into a full datetime
+    const eventStartStr = event.date + 'T' + event.start_time;
+    const eventStartTime = new Date(eventStartStr).getTime();
+    if (isNaN(eventStartTime)) return;
+
+    const now = Date.now();
+    const diff = eventStartTime - now;
+
+    // If event already started or more than 24 hours away, no notification needed
+    if (diff <= 0 || diff > 24 * 60 * 60 * 1000) return;
+
+    const ONE_HOUR = 60 * 60 * 1000;
+
+    // 1-hour notification (event starts within 1 hour) - 30 minute cooldown
+    if (diff <= ONE_HOUR) {
+      const recent1h = db.prepare(
+        "SELECT id FROM messages WHERE event_id = ? AND type = 'auto_event_start_1h' AND created_at > datetime('now', '-30 minutes')"
+      ).get(eventId);
+
+      if (!recent1h) {
+        const minutesLeft = Math.ceil(diff / (60 * 1000));
+        const messageId = uuidv4();
+        const location = event.start_time ? ' at ' + event.start_time : '';
+        const venue = (() => { try { return JSON.parse(event.settings || '{}').location || ''; } catch(e) { return ''; } })();
+        const content = minutesLeft <= 10
+          ? `🎉 The event is starting in just ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}! Get your song requests in now!`
+          : `🎶 The event starts in ${minutesLeft} minutes${location}! Make sure your favorite songs are in the queue!`;
+
+        db.prepare(`
+          INSERT INTO messages (id, event_id, dj_id, content, target_audience, type)
+          VALUES (?, ?, ?, ?, 'all', 'auto_event_start_1h')
+        `).run(messageId, eventId, event.dj_id, content);
+
+        console.log(`[Auto] Event start 1h notification sent for event ${eventId} (${minutesLeft}min remaining)`);
+      }
+    }
+    // 24-hour notification (event starts within 24 hours but more than 1 hour away) - 12 hour cooldown
+    else if (diff <= 24 * ONE_HOUR) {
+      const recent24h = db.prepare(
+        "SELECT id FROM messages WHERE event_id = ? AND type = 'auto_event_start_24h' AND created_at > datetime('now', '-720 minutes')"
+      ).get(eventId);
+
+      if (!recent24h) {
+        const hoursLeft = Math.ceil(diff / ONE_HOUR);
+        const messageId = uuidv4();
+        const content = `🎵 The event starts in ${hoursLeft} hour${hoursLeft === 1 ? '' : 's'}! Start browsing songs and get your requests ready!`;
+
+        db.prepare(`
+          INSERT INTO messages (id, event_id, dj_id, content, target_audience, type)
+          VALUES (?, ?, ?, ?, 'all', 'auto_event_start_24h')
+        `).run(messageId, eventId, event.dj_id, content);
+
+        console.log(`[Auto] Event start 24h notification sent for event ${eventId} (${hoursLeft}h remaining)`);
+      }
+    }
+  } catch (err) {
+    console.error('Event start notification check error:', err);
+  }
+}
+
 // GET /api/events/:eventId/public - Get public event info (no auth required)
 router.get('/events/:eventId/public', (req, res) => {
   try {
@@ -57,6 +197,12 @@ router.get('/events/:eventId/public', (req, res) => {
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
     }
+
+    // Check for automated vote close notifications on each public poll
+    checkVoteCloseAndNotify(req.params.eventId);
+    // Check for automated event starting soon notifications
+    checkEventStartAndNotify(req.params.eventId);
+
     res.json({
       id: event.id,
       name: event.name,
