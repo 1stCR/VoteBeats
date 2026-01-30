@@ -1,5 +1,20 @@
 ===== VoteBeats Development Progress =====
 
+=== Session: 2026-01-30 (Session 67) ===
+Status: 255/255 features passing (100%)
+
+REGRESSION TESTING:
+- Feature #150 (New request notification in approval mode): PASSED
+  - Registered DJ, created event, enabled Require DJ Approval
+  - Submitted Bohemian Rhapsody by Queen as attendee
+  - Song appeared in DJ Pending Requests with Approve/Reject buttons
+  - Approved request, moved to Queue successfully
+
+- Feature #80 (Voting schedule: open immediately): PASSED
+  - Voting open immediately confirmed, attendee voted successfully (0 to 1)
+
+ALL REGRESSION TESTS PASSED. Zero console errors. No regressions across 67 sessions.
+
 === Session: 2026-01-30 (Session 66) ===
 Status: 255/255 features passing (100%)
 
