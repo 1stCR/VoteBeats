@@ -247,6 +247,20 @@ export const api = {
   deleteTemplate: (id) =>
     apiRequest(`/api/templates/${id}`, { method: 'DELETE' }),
 
+
+  // Spotify Integration
+  getSpotifyStatus: () =>
+    apiRequest('/api/spotify/status'),
+
+  connectSpotify: (spotifyDisplayName, spotifyEmail) =>
+    apiRequest('/api/spotify/connect', {
+      method: 'POST',
+      body: JSON.stringify({ spotifyDisplayName, spotifyEmail }),
+    }),
+
+  disconnectSpotify: () =>
+    apiRequest('/api/spotify/disconnect', { method: 'DELETE' }),
+
   // Health
   healthCheck: () =>
     apiRequest('/api/health'),

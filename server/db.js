@@ -97,6 +97,12 @@ try { db.exec('ALTER TABLE requests ADD COLUMN song_genre TEXT'); } catch(e) { /
 try { db.exec('ALTER TABLE events ADD COLUMN edit_mode INTEGER DEFAULT 0'); } catch(e) { /* column exists */ }
 try { db.exec('ALTER TABLE events ADD COLUMN edit_mode_snapshot TEXT'); } catch(e) { /* column exists */ }
 
+// Spotify integration columns
+try { db.exec('ALTER TABLE users ADD COLUMN spotify_connected INTEGER DEFAULT 0'); } catch(e) { /* column exists */ }
+try { db.exec('ALTER TABLE users ADD COLUMN spotify_display_name TEXT'); } catch(e) { /* column exists */ }
+try { db.exec('ALTER TABLE users ADD COLUMN spotify_email TEXT'); } catch(e) { /* column exists */ }
+try { db.exec('ALTER TABLE users ADD COLUMN spotify_connected_at TEXT'); } catch(e) { /* column exists */ }
+
 // Create message_reads table for tracking which attendees have read messages
 db.exec(`
   CREATE TABLE IF NOT EXISTS message_reads (

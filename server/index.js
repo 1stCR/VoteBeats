@@ -10,6 +10,7 @@ const songRoutes = require('./routes/songs');
 const messageRoutes = require('./routes/messages');
 const twofaRoutes = require('./routes/twofa');
 const templateRoutes = require('./routes/templates');
+const spotifyRoutes = require('./routes/spotify');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -67,6 +68,7 @@ app.use('/api', messageRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/songs', songRoutes);
 app.use('/api/templates', templateRoutes);
+app.use('/api/spotify', spotifyRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
