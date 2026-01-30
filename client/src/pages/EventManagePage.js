@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
-import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users, StickyNote, Save, ArrowUpDown, Search, Keyboard, GripVertical } from 'lucide-react';
+import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users, StickyNote, Save, ArrowUpDown, Search, Keyboard, GripVertical, WifiOff } from 'lucide-react';
 import { api } from '../config/api';
 import { useTheme } from '../contexts/ThemeContext';
 import EventSettingsForm from '../components/EventSettingsForm';
@@ -46,6 +46,21 @@ export default function EventManagePage() {
   const [dragOverRequestId, setDragOverRequestId] = useState(null); // drag-and-drop: ID being hovered over
   const [editMode, setEditMode] = useState(false); // batch edit mode: pauses attendee updates
   const [togglingEditMode, setTogglingEditMode] = useState(false);
+  const [offlineChecklist, setOfflineChecklist] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`votebeats_offline_checklist_${id}`);
+      return saved ? JSON.parse(saved) : {
+        closeVoting: false,
+        reviewQueue: false,
+        exportPlaylist: false,
+        downloadOffline: false,
+        enableOffline: false,
+        downloadBackup: false,
+      };
+    } catch {
+      return { closeVoting: false, reviewQueue: false, exportPlaylist: false, downloadOffline: false, enableOffline: false, downloadBackup: false };
+    }
+  });
   const [preppedSongs, setPreppedSongs] = useState(() => {
     try {
       const saved = localStorage.getItem(`votebeats_prepped_${id}`);
@@ -76,6 +91,19 @@ export default function EventManagePage() {
     } catch {}
   }, [preppedSongs, id]);
 
+  // Persist offline checklist to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(`votebeats_offline_checklist_${id}`, JSON.stringify(offlineChecklist));
+    } catch {}
+  }, [offlineChecklist, id]);
+
+  const toggleOfflineChecklistItem = (key) => {
+    setOfflineChecklist(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const offlineChecklistComplete = offlineChecklist && Object.values(offlineChecklist).every(v => v);
+
   // Helper to format duration from milliseconds to mm:ss
   const formatDuration = (ms) => {
     if (!ms) return null;
@@ -88,7 +116,7 @@ export default function EventManagePage() {
   // Determine active view from URL path
   const pathParts = location.pathname.split('/');
   const lastPart = pathParts[pathParts.length - 1];
-  const activeView = (lastPart === 'settings' || lastPart === 'analytics' || lastPart === 'pending' || lastPart === 'messages' || lastPart === 'prep') ? lastPart : 'queue';
+  const activeView = (lastPart === 'settings' || lastPart === 'analytics' || lastPart === 'pending' || lastPart === 'messages' || lastPart === 'prep' || lastPart === 'offline-prep') ? lastPart : 'queue';
 
   const loadEvent = useCallback(async () => {
     try {
@@ -652,6 +680,7 @@ export default function EventManagePage() {
     { key: 'pending', label: 'Pending Requests', icon: Inbox, path: '/events/' + id + '/manage/pending' },
     { key: 'messages', label: 'Messages', icon: MessageSquare, path: '/events/' + id + '/manage/messages' },
     { key: 'prep', label: 'Prep', icon: ClipboardList, path: '/events/' + id + '/manage/prep' },
+    { key: 'offline-prep', label: 'Offline Prep', icon: WifiOff, path: '/events/' + id + '/manage/offline-prep' },
     { key: 'settings', label: 'Settings', icon: Settings, path: '/events/' + id + '/manage/settings' },
     { key: 'analytics', label: 'Analytics', icon: BarChart3, path: '/events/' + id + '/manage/analytics' },
   ];
@@ -2079,6 +2108,100 @@ export default function EventManagePage() {
               </div>
             );
           })()}
+
+          {activeView === 'offline-prep' && (
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${offlineChecklistComplete ? 'bg-green-100 dark:bg-green-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}`}>
+                  <WifiOff className={`w-5 h-5 ${offlineChecklistComplete ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">Offline Preparation Checklist</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {offlineChecklistComplete
+                      ? 'All steps complete - ready for offline operation!'
+                      : 'Complete these steps before going offline'}
+                  </p>
+                </div>
+              </div>
+
+              {offlineChecklistComplete && (
+                <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-3">
+                  <Check className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                  <span className="text-green-800 dark:text-green-300 font-medium">All preparation steps are complete. You are ready to go offline!</span>
+                </div>
+              )}
+
+              <div className="space-y-3" data-offline-checklist>
+                {[
+                  { key: 'closeVoting', label: 'Close Voting', description: 'Stop accepting new votes to lock the queue order' },
+                  { key: 'reviewQueue', label: 'Review Queue', description: 'Review and finalize the song queue order' },
+                  { key: 'exportPlaylist', label: 'Export Playlist', description: 'Export the queue as a playlist (CSV or Spotify)' },
+                  { key: 'downloadOffline', label: 'Download for Offline', description: 'Download queue data for offline access' },
+                  { key: 'enableOffline', label: 'Enable Offline Mode', description: 'Enable offline mode to stop live syncing' },
+                  { key: 'downloadBackup', label: 'Download Backup', description: 'Download a full backup of event data' },
+                ].map((item, index) => (
+                  <button
+                    key={item.key}
+                    onClick={() => toggleOfflineChecklistItem(item.key)}
+                    className={`w-full flex items-center gap-4 p-4 rounded-lg border transition-all text-left ${
+                      offlineChecklist[item.key]
+                        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                        : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 hover:border-indigo-300 dark:hover:border-indigo-600'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      offlineChecklist[item.key]
+                        ? 'bg-green-500 text-white'
+                        : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400'
+                    }`}>
+                      {offlineChecklist[item.key]
+                        ? <Check className="w-4 h-4" />
+                        : <span className="text-sm font-bold">{index + 1}</span>
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-medium ${
+                        offlineChecklist[item.key]
+                          ? 'text-green-800 dark:text-green-300 line-through'
+                          : 'text-slate-900 dark:text-white'
+                      }`}>
+                        {item.label}
+                      </p>
+                      <p className={`text-sm ${
+                        offlineChecklist[item.key]
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-slate-500 dark:text-slate-400'
+                      }`}>
+                        {item.description}
+                      </p>
+                    </div>
+                    <div className="flex-shrink-0">
+                      {offlineChecklist[item.key]
+                        ? <CheckSquare className="w-5 h-5 text-green-500" />
+                        : <Square className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+                      }
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-6 flex items-center justify-between">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {Object.values(offlineChecklist).filter(v => v).length} of {Object.values(offlineChecklist).length} steps completed
+                </p>
+                <button
+                  onClick={() => setOfflineChecklist({
+                    closeVoting: false, reviewQueue: false, exportPlaylist: false,
+                    downloadOffline: false, enableOffline: false, downloadBackup: false,
+                  })}
+                  className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 underline"
+                >
+                  Reset Checklist
+                </button>
+              </div>
+            </div>
+          )}
 
           {activeView === 'settings' && (
             <EventSettingsForm event={event} eventId={id} onSaved={(updated) => setEvent(updated)} />
