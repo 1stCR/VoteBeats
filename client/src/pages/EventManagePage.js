@@ -104,6 +104,69 @@ export default function EventManagePage() {
 
   const offlineChecklistComplete = offlineChecklist && Object.values(offlineChecklist).every(v => v);
 
+  // Export entire queue to Spotify for offline download
+  const exportQueueToSpotify = () => {
+    const queueSongs = requests.filter(r => ['queued', 'nowPlaying', 'played'].includes(r.status));
+    if (queueSongs.length === 0) {
+      alert('No songs in queue to export.');
+      return;
+    }
+    const eventName = event?.name || 'Event';
+    const eventDate = event?.date ? new Date(event.date).toLocaleDateString() : '';
+    const playlistName = eventName + (eventDate ? ' - ' + eventDate : '');
+
+    const songRows = queueSongs.map((r, i) => {
+      const title = r.song?.title || r.songTitle || '';
+      const artist = r.song?.artist || r.artistName || '';
+      const query = (title + ' ' + artist).trim();
+      const spotifyUrl = 'https://open.spotify.com/search/' + encodeURIComponent(query);
+      const statusLabel = r.status === 'played' ? 'Played' : r.status === 'nowPlaying' ? 'Now Playing' : 'Queued';
+      const statusColor = r.status === 'played' ? '#10b981' : r.status === 'nowPlaying' ? '#f59e0b' : '#6366f1';
+      return '<tr>' +
+        '<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">' + (i + 1) + '</td>' +
+        '<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;">' + title + '</td>' +
+        '<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">' + artist + '</td>' +
+        '<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;"><span style="color:' + statusColor + ';font-weight:600;font-size:12px;">' + statusLabel + '</span></td>' +
+        '<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;"><a href="' + spotifyUrl + '" target="_blank" style="color:#1DB954;text-decoration:none;font-weight:600;">Open in Spotify</a></td>' +
+        '</tr>';
+    }).join('');
+
+    const html = '<!DOCTYPE html><html><head><title>Spotify Queue - ' + playlistName + '</title>' +
+      '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:20px;background:#f8fafc;}' +
+      '.header{background:linear-gradient(135deg,#1DB954,#1ed760);color:white;padding:24px 32px;border-radius:16px;margin-bottom:24px;}' +
+      '.header h1{margin:0 0 4px;font-size:24px;}.header p{margin:0;opacity:0.9;font-size:14px;}' +
+      '.card{background:white;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:hidden;margin-bottom:20px;}' +
+      'table{width:100%;border-collapse:collapse;}' +
+      'th{background:#f1f5f9;padding:10px 12px;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;}' +
+      '.btn{display:inline-block;background:#1DB954;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px;}' +
+      '.info{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px 20px;margin-bottom:20px;}' +
+      '.info h3{margin:0 0 8px;color:#166534;font-size:16px;}.info p{margin:0;color:#15803d;font-size:14px;line-height:1.5;}' +
+      '.info ol{margin:8px 0 0;padding-left:20px;color:#15803d;font-size:14px;line-height:1.8;}' +
+      '</style></head><body>' +
+      '<div class="header"><h1>Spotify Queue Export</h1>' +
+      '<p>' + playlistName + ' &bull; ' + queueSongs.length + ' songs for offline download</p></div>' +
+      '<div class="info"><h3>How to Download for Offline Playback</h3>' +
+      '<ol>' +
+      '<li>Click each "Open in Spotify" link to find the song</li>' +
+      '<li>Add each song to a new or existing playlist</li>' +
+      '<li>In the Spotify app, open your playlist</li>' +
+      '<li>Toggle the "Download" switch to save songs offline</li>' +
+      '</ol>' +
+      '<p style="margin-top:8px;">Once downloaded, you can play these songs without an internet connection at your venue.</p>' +
+      '</div>' +
+      '<div class="card"><table><thead><tr>' +
+      '<th>#</th><th>Title</th><th>Artist</th><th>Status</th><th>Spotify</th>' +
+      '</tr></thead><tbody>' + songRows + '</tbody></table></div>' +
+      '<div style="text-align:center;margin:20px 0;">' +
+      '<a href="https://open.spotify.com/collection/playlists" target="_blank" class="btn">Open Spotify Playlists</a>' +
+      '</div>' +
+      '<div style="text-align:center;padding:20px;color:#94a3b8;font-size:12px;">Exported from VoteBeats &bull; ' + new Date().toLocaleString() + '</div>' +
+      '</body></html>';
+
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); }
+  };
+
   // Helper to format duration from milliseconds to mm:ss
   const formatDuration = (ms) => {
     if (!ms) return null;
@@ -2209,6 +2272,24 @@ export default function EventManagePage() {
                   Reset Checklist
                 </button>
               </div>
+
+              {/* Quick Export Actions */}
+              <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Quick Export Actions</h3>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={exportQueueToSpotify}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition-colors"
+                    data-export-queue-spotify
+                  >
+                    <Music className="w-4 h-4" />
+                    Export Queue to Spotify
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  Export your queue to Spotify, then download the playlist for offline playback at your venue.
+                </p>
+              </div>
             </div>
           )}
 
@@ -2632,6 +2713,57 @@ export default function EventManagePage() {
               URL.revokeObjectURL(url);
             };
 
+
+            // Export played songs to Spotify - opens a formatted page with Spotify links
+            const exportPlayedToSpotify = () => {
+              const played = requests.filter(r => r.status === 'played');
+              if (played.length === 0) {
+                alert('No played songs to export.');
+                return;
+              }
+              const eventName = event?.name || 'Event';
+              const eventDate = event?.date ? new Date(event.date).toLocaleDateString() : '';
+              const playlistName = eventName + (eventDate ? ' - ' + eventDate : '');
+
+              const songRows = played.map((r, i) => {
+                const title = r.song?.title || r.songTitle || '';
+                const artist = r.song?.artist || r.artistName || '';
+                const query = (title + ' ' + artist).trim();
+                const spotifyUrl = 'https://open.spotify.com/search/' + encodeURIComponent(query);
+                return '<tr>' +
+                  '<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">' + (i + 1) + '</td>' +
+                  '<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;">' + title + '</td>' +
+                  '<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">' + artist + '</td>' +
+                  '<td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;"><a href="' + spotifyUrl + '" target="_blank" style="color:#1DB954;text-decoration:none;font-weight:600;">Open in Spotify</a></td>' +
+                  '</tr>';
+              }).join('');
+
+              const html = '<!DOCTYPE html><html><head><title>Spotify Playlist - ' + playlistName + '</title>' +
+                '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:20px;background:#f8fafc;}' +
+                '.header{background:linear-gradient(135deg,#1DB954,#1ed760);color:white;padding:24px 32px;border-radius:16px;margin-bottom:24px;}' +
+                '.header h1{margin:0 0 4px;font-size:24px;}.header p{margin:0;opacity:0.9;font-size:14px;}' +
+                '.card{background:white;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:hidden;margin-bottom:20px;}' +
+                'table{width:100%;border-collapse:collapse;}' +
+                'th{background:#f1f5f9;padding:10px 12px;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;}' +
+                '.footer{text-align:center;padding:20px;color:#94a3b8;font-size:12px;}' +
+                '.btn{display:inline-block;background:#1DB954;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px;}' +
+                '</style></head><body>' +
+                '<div class="header"><h1>Spotify Playlist Export</h1>' +
+                '<p>' + playlistName + ' &bull; ' + played.length + ' songs played</p></div>' +
+                '<div class="card"><table><thead><tr>' +
+                '<th>#</th><th>Title</th><th>Artist</th><th>Spotify</th>' +
+                '</tr></thead><tbody>' + songRows + '</tbody></table></div>' +
+                '<div style="text-align:center;margin:20px 0;">' +
+                '<p style="color:#64748b;font-size:14px;margin-bottom:8px;">Click each song link above to find and add it to your Spotify playlist.</p>' +
+                '<a href="https://open.spotify.com/collection/playlists" target="_blank" class="btn">Open Spotify Playlists</a>' +
+                '</div>' +
+                '<div class="footer">Exported from VoteBeats &bull; ' + new Date().toLocaleString() + '</div>' +
+                '</body></html>';
+
+              const w = window.open('', '_blank');
+              if (w) { w.document.write(html); w.document.close(); }
+            };
+
             return (
               <div className="space-y-6" data-analytics-dashboard>
                 {/* Header */}
@@ -2657,6 +2789,15 @@ export default function EventManagePage() {
                       >
                         <Download className="w-4 h-4" />
                         Export CSV
+                      </button>
+                      <button
+                        onClick={exportPlayedToSpotify}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition-colors"
+                        data-export-spotify
+                        title="Export played songs as Spotify playlist"
+                      >
+                        <Music className="w-4 h-4" />
+                        Export to Spotify
                       </button>
                     </div>
                   </div>
