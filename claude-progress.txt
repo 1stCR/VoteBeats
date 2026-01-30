@@ -1,5 +1,17 @@
 ===== VoteBeats Development Progress =====
 
+=== Session: 2026-01-30 (Session 85) ===
+Status: 255/255 features passing (100%)
+
+REGRESSION TESTING:
+- Feature #80 (Voting schedule: open immediately or scheduled): PASSED
+- Feature #121 (DJ action: mark song as Now Playing): PASSED
+- Feature #65 (Attendee vote and request history tied to anonymous ID): PASSED
+ALL REGRESSION TESTS PASSED. No regressions found. Zero console errors.
+
+CODE CHANGES: None (regression testing only)
+NEXT SESSION: All 255/255 features passing. App stable across 85 sessions.
+
 === Session: 2026-01-30 (Session 84) ===
 Status: 255/255 features passing (100%)
 REGRESSION TESTING:
