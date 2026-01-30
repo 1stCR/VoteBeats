@@ -210,14 +210,14 @@ export const api = {
     apiRequest(`/api/songs/search?q=${encodeURIComponent(query)}`),
 
   // Messages
-  sendDJMessage: (eventId, content) =>
+  sendDJMessage: (eventId, content, targetAudience = 'all') =>
     apiRequest(`/api/events/${eventId}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, targetAudience }),
     }),
 
-  getEventMessages: (eventId) =>
-    apiRequest(`/api/events/${eventId}/messages`),
+  getEventMessages: (eventId, userId) =>
+    apiRequest(`/api/events/${eventId}/messages${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`),
 
   deleteDJMessage: (eventId, messageId) =>
     apiRequest(`/api/events/${eventId}/messages/${messageId}`, { method: 'DELETE' }),

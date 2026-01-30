@@ -61,9 +61,10 @@ router.post('/events/:eventId/messages', authenticateToken, (req, res) => {
   }
 });
 
-// GET /events/:eventId/messages - List all messages for an event (public, no auth)
+// GET /events/:eventId/messages - List messages for an event (public, with optional audience filtering)
 router.get('/events/:eventId/messages', (req, res) => {
   const { eventId } = req.params;
+  const { userId } = req.query; // attendee's anonymous ID for audience filtering
 
   // Verify event exists
   const event = db.prepare('SELECT id FROM events WHERE id = ?').get(eventId);
@@ -79,7 +80,47 @@ router.get('/events/:eventId/messages', (req, res) => {
       ORDER BY created_at DESC
     `).all(eventId);
 
-    res.json(messages.map(formatMessage));
+    // If no userId provided (e.g. DJ view), return all messages
+    if (!userId) {
+      return res.json(messages.map(formatMessage));
+    }
+
+    // Filter messages based on target_audience and attendee activity
+    const filteredMessages = messages.filter(msg => {
+      const audience = msg.target_audience;
+
+      // 'all' messages go to everyone
+      if (audience === 'all') return true;
+
+      if (audience === 'no_requests') {
+        // People who haven't submitted any requests
+        const requestCount = db.prepare(
+          'SELECT COUNT(*) as cnt FROM requests WHERE event_id = ? AND requested_by = ?'
+        ).get(eventId, userId);
+        return (requestCount?.cnt || 0) === 0;
+      }
+
+      if (audience === 'top_voters') {
+        // People who have voted on at least 3 songs
+        const voteCount = db.prepare(
+          'SELECT COUNT(*) as cnt FROM votes WHERE user_id = ? AND request_id IN (SELECT id FROM requests WHERE event_id = ?)'
+        ).get(userId, eventId);
+        return (voteCount?.cnt || 0) >= 3;
+      }
+
+      if (audience === 'played_requesters') {
+        // People whose at least one request has been played
+        const playedCount = db.prepare(
+          'SELECT COUNT(*) as cnt FROM requests WHERE event_id = ? AND requested_by = ? AND status = ?'
+        ).get(eventId, userId, 'played');
+        return (playedCount?.cnt || 0) > 0;
+      }
+
+      // Unknown audience type - show it to be safe
+      return true;
+    });
+
+    res.json(filteredMessages.map(formatMessage));
   } catch (err) {
     console.error('Failed to fetch messages:', err);
     res.status(500).json({ error: 'Failed to fetch messages' });

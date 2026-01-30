@@ -24,6 +24,7 @@ export default function EventManagePage() {
   const [djMessages, setDjMessages] = useState([]);
   const [newDJMessage, setNewDJMessage] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [messageTargetAudience, setMessageTargetAudience] = useState('all');
   const [allEvents, setAllEvents] = useState([]);
   const [showEventDropdown, setShowEventDropdown] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -273,8 +274,9 @@ export default function EventManagePage() {
     if (!newDJMessage.trim()) return;
     setSendingMessage(true);
     try {
-      await api.sendDJMessage(id, newDJMessage.trim());
+      await api.sendDJMessage(id, newDJMessage.trim(), messageTargetAudience);
       setNewDJMessage('');
+      setMessageTargetAudience('all');
       fetchDJMessages();
     } catch (err) {
       alert(err.message || 'Failed to send message');
@@ -1857,13 +1859,34 @@ export default function EventManagePage() {
                   rows={3}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none resize-none mb-3"
                 />
-                <button
-                  onClick={handleSendDJMessage}
-                  disabled={sendingMessage || !newDJMessage.trim()}
-                  className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 text-sm font-medium"
-                >
-                  {sendingMessage ? 'Sending...' : 'Send to All Attendees'}
-                </button>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">Send to:</label>
+                    <select
+                      value={messageTargetAudience}
+                      onChange={(e) => setMessageTargetAudience(e.target.value)}
+                      className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                      data-audience-select
+                    >
+                      <option value="all">Everyone</option>
+                      <option value="no_requests">People who haven't requested</option>
+                      <option value="top_voters">Top voters (3+ votes)</option>
+                      <option value="played_requesters">People whose songs were played</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={handleSendDJMessage}
+                    disabled={sendingMessage || !newDJMessage.trim()}
+                    className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 text-sm font-medium"
+                  >
+                    {sendingMessage ? 'Sending...' : 'Send Message'}
+                  </button>
+                </div>
+                {messageTargetAudience !== 'all' && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                    This message will only be visible to {messageTargetAudience === 'no_requests' ? 'attendees who haven\'t submitted any requests' : messageTargetAudience === 'top_voters' ? 'attendees who have voted on 3+ songs' : 'attendees whose requests have been played'}.
+                  </p>
+                )}
               </div>
               {djMessages.length === 0 ? (
                 <p className="text-slate-500 dark:text-slate-400 text-center py-4">No messages sent yet.</p>
@@ -1873,7 +1896,22 @@ export default function EventManagePage() {
                     <div key={msg.id} className="flex items-start justify-between gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-slate-900 dark:text-white">{msg.content}</p>
-                        <p className="text-xs text-slate-500 mt-1">{new Date(msg.createdAt).toLocaleString()}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-xs text-slate-500">{new Date(msg.createdAt).toLocaleString()}</p>
+                          {msg.targetAudience && msg.targetAudience !== 'all' && (
+                            <span className={`px-1.5 py-0.5 text-xs rounded-full font-medium ${
+                              msg.targetAudience === 'no_requests' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                              msg.targetAudience === 'top_voters' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+                              msg.targetAudience === 'played_requesters' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                              'bg-slate-100 text-slate-700 dark:bg-slate-600 dark:text-slate-300'
+                            }`}>
+                              {msg.targetAudience === 'no_requests' ? 'No requests' :
+                               msg.targetAudience === 'top_voters' ? 'Top voters' :
+                               msg.targetAudience === 'played_requesters' ? 'Played requesters' :
+                               msg.targetAudience}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <button
                         onClick={() => handleDeleteDJMessage(msg.id)}

@@ -182,7 +182,7 @@ export default function EventPublicPage() {
       await fetchRequests();
 
       try {
-        const msgs = await api.getEventMessages(eventId);
+        const msgs = await api.getEventMessages(eventId, attendeeId);
         setDjAnnouncements(msgs);
       } catch (err) {
         console.error('Failed to fetch DJ messages');
