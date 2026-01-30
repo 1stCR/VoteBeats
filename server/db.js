@@ -94,6 +94,8 @@ try { db.exec("ALTER TABLE users ADD COLUMN notification_preferences TEXT DEFAUL
 try { db.exec("ALTER TABLE users ADD COLUMN default_event_settings TEXT DEFAULT '{}'"); } catch(e) { /* column exists */ }
 
 try { db.exec('ALTER TABLE requests ADD COLUMN song_genre TEXT'); } catch(e) { /* column exists */ }
+try { db.exec('ALTER TABLE events ADD COLUMN edit_mode INTEGER DEFAULT 0'); } catch(e) { /* column exists */ }
+try { db.exec('ALTER TABLE events ADD COLUMN edit_mode_snapshot TEXT'); } catch(e) { /* column exists */ }
 
 // Create settings_templates table
 db.exec(`

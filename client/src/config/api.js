@@ -195,6 +195,16 @@ export const api = {
       body: JSON.stringify({ notes }),
     }),
 
+  // Edit Mode
+  toggleEditMode: (eventId, enabled) =>
+    apiRequest(`/api/events/${eventId}/edit-mode`, {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }),
+
+  getEditModeStatus: (eventId) =>
+    apiRequest(`/api/events/${eventId}/edit-mode`),
+
   // Songs
   searchSongs: (query) =>
     apiRequest(`/api/songs/search?q=${encodeURIComponent(query)}`),

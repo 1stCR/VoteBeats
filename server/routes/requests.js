@@ -228,6 +228,54 @@ router.post('/events/:eventId/requests', (req, res) => {
   }
 });
 
+// PUT /api/events/:eventId/edit-mode - Toggle edit mode (DJ only)
+router.put('/events/:eventId/edit-mode', authenticateToken, (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { enabled } = req.body;
+
+    const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    if (event.dj_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    if (enabled) {
+      // Entering edit mode: snapshot the current requests
+      const requests = db.prepare('SELECT * FROM requests WHERE event_id = ? ORDER BY CASE WHEN manual_order IS NOT NULL THEN 0 ELSE 1 END, manual_order ASC, vote_count DESC, created_at ASC').all(eventId);
+      const snapshot = JSON.stringify(requests.map(r => formatRequest(r)));
+      db.prepare('UPDATE events SET edit_mode = 1, edit_mode_snapshot = ?, updated_at = datetime(\'now\') WHERE id = ?')
+        .run(snapshot, eventId);
+      res.json({ editMode: true, message: 'Edit mode enabled. Attendee views are frozen.' });
+    } else {
+      // Exiting edit mode: clear snapshot, attendees will see live data
+      db.prepare('UPDATE events SET edit_mode = 0, edit_mode_snapshot = NULL, updated_at = datetime(\'now\') WHERE id = ?')
+        .run(eventId);
+      res.json({ editMode: false, message: 'Edit mode disabled. Changes published to attendees.' });
+    }
+  } catch (err) {
+    console.error('Toggle edit mode error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/events/:eventId/edit-mode - Get edit mode status (DJ only)
+router.get('/events/:eventId/edit-mode', authenticateToken, (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const event = db.prepare('SELECT edit_mode FROM events WHERE id = ?').get(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    res.json({ editMode: !!event.edit_mode });
+  } catch (err) {
+    console.error('Get edit mode error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/events/:eventId/requests - List requests (public for attendees, or authenticated for DJ)
 router.get('/events/:eventId/requests', (req, res) => {
   try {
@@ -249,6 +297,23 @@ router.get('/events/:eventId/requests', (req, res) => {
         }
       } catch (e) {
         // Invalid token - treat as public access
+      }
+    }
+
+    // If edit mode is active and user is NOT the DJ, return frozen snapshot
+    if (!isDJ) {
+      const eventCheck = db.prepare('SELECT edit_mode, edit_mode_snapshot FROM events WHERE id = ?').get(eventId);
+      if (eventCheck && eventCheck.edit_mode && eventCheck.edit_mode_snapshot) {
+        try {
+          const snapshot = JSON.parse(eventCheck.edit_mode_snapshot);
+          // Strip DJ notes from snapshot and return
+          return res.json(snapshot.map(r => {
+            delete r.djNotes;
+            return r;
+          }));
+        } catch (e) {
+          // Invalid snapshot, fall through to live data
+        }
       }
     }
 

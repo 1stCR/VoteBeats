@@ -43,6 +43,8 @@ export default function EventManagePage() {
   const knownRequestIds = useRef(null); // tracks known request IDs to detect new ones
   const [draggedRequestId, setDraggedRequestId] = useState(null); // drag-and-drop: ID being dragged
   const [dragOverRequestId, setDragOverRequestId] = useState(null); // drag-and-drop: ID being hovered over
+  const [editMode, setEditMode] = useState(false); // batch edit mode: pauses attendee updates
+  const [togglingEditMode, setTogglingEditMode] = useState(false);
   const [preppedSongs, setPreppedSongs] = useState(() => {
     try {
       const saved = localStorage.getItem(`votebeats_prepped_${id}`);
@@ -477,6 +479,33 @@ export default function EventManagePage() {
       (r.requestedBy?.nickname || '').toLowerCase().includes(q)
     );
   }
+
+  // Edit mode: pause attendee updates while reorganizing
+  async function handleToggleEditMode() {
+    setTogglingEditMode(true);
+    try {
+      const newMode = !editMode;
+      await api.toggleEditMode(id, newMode);
+      setEditMode(newMode);
+    } catch (err) {
+      console.error('Failed to toggle edit mode:', err);
+    } finally {
+      setTogglingEditMode(false);
+    }
+  }
+
+  // Load edit mode status on mount
+  useEffect(() => {
+    async function checkEditMode() {
+      try {
+        const data = await api.getEditModeStatus(id);
+        setEditMode(data.editMode);
+      } catch (err) {
+        // Ignore - edit mode defaults to off
+      }
+    }
+    checkEditMode();
+  }, [id]);
 
   // Drag-and-drop handlers for queue reordering
   function handleDragStart(e, requestId) {
@@ -992,6 +1021,27 @@ export default function EventManagePage() {
                     Song Requests ({requests.length})
                   </h3>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleToggleEditMode}
+                      disabled={togglingEditMode}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                        editMode
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-300 dark:border-amber-700 animate-pulse'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                      }`}
+                      title={editMode ? 'Attendee views are paused. Click to publish changes.' : 'Pause attendee updates while you reorganize the queue'}
+                      data-edit-mode-toggle
+                    >
+                      <span className="flex items-center gap-1.5">
+                        {editMode ? <StopCircle className="w-3.5 h-3.5" /> : <Settings className="w-3.5 h-3.5" />}
+                        {togglingEditMode ? 'Saving...' : editMode ? 'Publish Changes' : 'Edit Mode'}
+                      </span>
+                    </button>
+                    {editMode && (
+                      <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                        Attendee updates paused
+                      </span>
+                    )}
                     {pendingRequests.length > 0 && (
                       <button
                         onClick={() => { setBatchMode(!batchMode); setSelectedRequests(new Set()); }}
