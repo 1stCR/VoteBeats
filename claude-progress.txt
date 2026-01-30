@@ -1,5 +1,27 @@
 ===== VoteBeats Development Progress =====
 
+=== Session: 2026-01-30 (Session 77) ===
+Status: 255/255 features passing (100%)
+
+REGRESSION TESTING:
+- Feature #35 (DJ dashboard event list shows all DJ events): PASSED
+  - Registered new DJ account (regtest_s77@test.com / DJ RegTest S77)
+  - Created 3 events: Alpha, Beta, Gamma S77
+  - Dashboard showed all 3 events with correct names, event count = 3
+
+- Feature #116 (Unlimited voting across different songs): PASSED
+  - Searched and requested 3 songs: Shape of You, Blinding Lights, Uptown Funk
+  - Voted on all 3 songs successfully - no limit enforced
+  - Screenshot verified clean UI with album art and vote badges
+
+- Feature #82 (Queue visibility): PASSED (indirect)
+  - Queue visible to attendee with all 3 requested songs and vote counts
+
+CONSOLE ERRORS: Zero JavaScript errors detected.
+NOTE: Backend restarted on port 3002. Frontend on port 3000.
+ALL REGRESSION TESTS PASSED. No regressions found.
+
+
 === Session: 2026-01-30 (Session 76) ===
 Status: 255/255 features passing (100%)
 
