@@ -1,0 +1,42 @@
+{
+  "name": "votebeats-desktop-helper",
+  "version": "1.0.0",
+  "description": "VoteBeats Desktop Helper - Automatic Now Playing detection via Spotify monitoring",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:all": "electron-builder --win --mac"
+  },
+  "build": {
+    "appId": "com.votebeats.desktop-helper",
+    "productName": "VoteBeats Desktop Helper",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.music"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "votebeats",
+      "repo": "desktop-helper"
+    }
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0",
+    "node-fetch": "^2.7.0",
+    "electron-updater": "^6.1.7"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3"
+  }
+}

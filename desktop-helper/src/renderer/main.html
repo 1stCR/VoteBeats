@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VoteBeats Desktop Helper</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, #1e1b4b, #312e81);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #334155;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .app-logo {
+      font-size: 18px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #6366f1, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .event-badge {
+      font-size: 12px;
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      padding: 4px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+    }
+    .status-dot.connected { background: #22c55e; animation: pulse 2s infinite; }
+    .status-dot.warning { background: #eab308; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    /* Now Playing Section */
+    .now-playing {
+      background: #1e293b;
+      padding: 20px;
+      border-bottom: 1px solid #334155;
+    }
+    .now-playing-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+    .track-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .track-art {
+      width: 56px;
+      height: 56px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #334155, #475569);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+    .track-details {
+      flex: 1;
+      min-width: 0;
+    }
+    .track-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #f1f5f9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .track-artist {
+      font-size: 13px;
+      color: #94a3b8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .progress-bar {
+      margin-top: 12px;
+      height: 4px;
+      background: #334155;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #6366f1, #8b5cf6);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 1s linear;
+    }
+    .progress-times {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+    .no-track {
+      text-align: center;
+      padding: 20px;
+      color: #64748b;
+      font-size: 14px;
+    }
+
+    /* Controls */
+    .controls {
+      padding: 16px 20px;
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid #334155;
+    }
+    .ctrl-btn {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #1e293b;
+      color: #e2e8f0;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .ctrl-btn:hover { background: #334155; }
+    .ctrl-btn.active {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-color: #6366f1;
+      color: white;
+    }
+    .ctrl-btn.danger { border-color: #dc2626; color: #fca5a5; }
+    .ctrl-btn.danger:hover { background: #7f1d1d; }
+
+    /* Queue Preview */
+    .queue-section {
+      flex: 1;
+      padding: 16px 20px;
+      overflow-y: auto;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f1f5f9;
+    }
+    .section-count {
+      font-size: 12px;
+      background: #334155;
+      color: #94a3b8;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .queue-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      transition: all 0.2s;
+    }
+    .queue-item:hover { border-color: #475569; }
+    .queue-number {
+      font-size: 12px;
+      font-weight: 700;
+      color: #6366f1;
+      width: 20px;
+      text-align: center;
+    }
+    .queue-song {
+      flex: 1;
+      min-width: 0;
+    }
+    .queue-song-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e2e8f0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .queue-song-artist {
+      font-size: 11px;
+      color: #64748b;
+    }
+    .queue-votes {
+      font-size: 12px;
+      color: #a5b4fc;
+      font-weight: 600;
+    }
+    .prep-status {
+      font-size: 14px;
+    }
+    .empty-queue {
+      text-align: center;
+      padding: 30px;
+      color: #475569;
+      font-size: 13px;
+    }
+
+    /* Settings Panel */
+    .settings-panel {
+      display: none;
+      padding: 16px 20px;
+      flex: 1;
+      overflow-y: auto;
+    }
+    .settings-panel.show { display: block; }
+    .setting-group {
+      margin-bottom: 20px;
+    }
+    .setting-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 6px;
+    }
+    .setting-group select, .setting-group input {
+      width: 100%;
+      padding: 8px 12px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 13px;
+      outline: none;
+    }
+    .setting-group select:focus, .setting-group input:focus {
+      border-color: #6366f1;
+    }
+    .setting-description {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    /* Confirmation Dialog */
+    .confirm-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .confirm-overlay.show { display: flex; }
+    .confirm-dialog {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 360px;
+      width: 90%;
+    }
+    .confirm-dialog h3 {
+      font-size: 16px;
+      margin-bottom: 8px;
+      color: #f1f5f9;
+    }
+    .confirm-dialog p {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 16px;
+    }
+    .confirm-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .confirm-actions button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .confirm-yes {
+      background: #22c55e;
+      color: white;
+    }
+    .confirm-no {
+      background: #334155;
+      color: #e2e8f0;
+    }
+
+    /* Alert Banner */
+    .alert-banner {
+      display: none;
+      padding: 10px 20px;
+      background: #7c2d12;
+      border-bottom: 1px solid #9a3412;
+      font-size: 12px;
+      color: #fed7aa;
+      text-align: center;
+      animation: slideDown 0.3s ease;
+    }
+    .alert-banner.show { display: block; }
+    @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+
+    /* Footer */
+    .footer {
+      padding: 12px 20px;
+      border-top: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #475569;
+    }
+    .footer a {
+      color: #6366f1;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <!-- Alert Banner -->
+  <div class="alert-banner" id="alert-banner"></div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <span class="app-logo">VoteBeats</span>
+      <span class="event-badge" id="event-name">Loading...</span>
+    </div>
+    <div class="status-indicator">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Disconnected</span>
+    </div>
+  </div>
+
+  <!-- Now Playing -->
+  <div class="now-playing">
+    <div class="now-playing-label">Now Playing</div>
+    <div id="now-playing-content">
+      <div class="no-track" id="no-track">
+        No song detected. Start playing music in Spotify.
+      </div>
+      <div id="track-display" style="display: none;">
+        <div class="track-info">
+          <div class="track-art" id="track-art">&#9835;</div>
+          <div class="track-details">
+            <div class="track-title" id="track-title">-</div>
+            <div class="track-artist" id="track-artist">-</div>
+          </div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-times">
+          <span id="time-current">0:00</span>
+          <span id="time-total">0:00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="ctrl-btn" id="monitor-btn" onclick="toggleMonitoring()">
+      Start Monitoring
+    </button>
+    <button class="ctrl-btn" id="queue-tab" onclick="showPanel('queue')">
+      Queue
+    </button>
+    <button class="ctrl-btn" id="settings-tab" onclick="showPanel('settings')">
+      Settings
+    </button>
+  </div>
+
+  <!-- Queue Panel -->
+  <div class="queue-section" id="queue-panel">
+    <div class="section-header">
+      <span class="section-title">Up Next</span>
+      <span class="section-count" id="queue-count">0</span>
+    </div>
+    <div id="queue-list">
+      <div class="empty-queue">No songs in queue yet.</div>
+    </div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div class="settings-panel" id="settings-panel">
+    <div class="section-header">
+      <span class="section-title">Settings</span>
+    </div>
+    <div class="setting-group">
+      <label>Automation Mode</label>
+      <select id="automation-mode" onchange="updateSetting('automationMode', this.value)">
+        <option value="fully-automatic">Fully Automatic</option>
+        <option value="semi-automatic" selected>Semi-Automatic</option>
+        <option value="manual">Manual</option>
+      </select>
+      <div class="setting-description">
+        Fully Automatic: Updates queue without confirmation.<br>
+        Semi-Automatic: Shows confirmation before updates.<br>
+        Manual: You control all updates.
+      </div>
+    </div>
+    <div class="setting-group">
+      <label>Polling Interval (seconds)</label>
+      <input type="number" id="polling-interval" value="3" min="1" max="10"
+        onchange="updateSetting('pollingInterval', this.value * 1000)">
+      <div class="setting-description">How often to check Spotify (1-10 seconds).</div>
+    </div>
+    <div class="setting-group">
+      <label>Server URL</label>
+      <input type="text" id="settings-server-url" readonly>
+    </div>
+    <div class="setting-group">
+      <label>DJ Account</label>
+      <input type="text" id="settings-email" readonly>
+    </div>
+    <div class="setting-group">
+      <button class="ctrl-btn danger" onclick="handleResetSetup()" style="width: 100%;">
+        Reset Setup &amp; Sign Out
+      </button>
+    </div>
+  </div>
+
+  <!-- Confirmation Dialog -->
+  <div class="confirm-overlay" id="confirm-overlay">
+    <div class="confirm-dialog">
+      <h3>New Song Detected</h3>
+      <p id="confirm-track-info">-</p>
+      <div class="confirm-actions">
+        <button class="confirm-no" onclick="dismissConfirm()">Dismiss</button>
+        <button class="confirm-yes" onclick="confirmNowPlaying()">Update Queue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>VoteBeats Desktop Helper v1.0.0</span>
+    <a onclick="handleOpenDashboard()">Open Dashboard</a>
+  </div>
+
+  <script>
+    let isMonitoring = false;
+    let pendingTrack = null;
+    let currentPanel = 'queue';
+
+    // Initialize
+    async function init() {
+      const eventName = await window.votebeats.getStore('selectedEventName');
+      const serverUrl = await window.votebeats.getStore('serverUrl');
+      const email = await window.votebeats.getStore('djEmail');
+      const mode = await window.votebeats.getStore('automationMode');
+      const autoStartResult = await window.votebeats.getAutoStart();
+      document.getElementById('auto-start-toggle').checked = autoStartResult.autoStart;
+      const interval = await window.votebeats.getStore('pollingInterval');
+
+      document.getElementById('event-name').textContent = eventName || 'No Event';
+      document.getElementById('settings-server-url').value = serverUrl || '';
+      document.getElementById('settings-email').value = email || '';
+      document.getElementById('automation-mode').value = mode || 'semi-automatic';
+      document.getElementById('polling-interval').value = (interval || 3000) / 1000;
+
+      updateStatus();
+    }
+
+    function updateStatus() {
+      const dot = document.getElementById('status-dot');
+      const text = document.getElementById('status-text');
+
+      if (isMonitoring) {
+        dot.className = 'status-dot connected';
+        text.textContent = 'Monitoring';
+      } else {
+        dot.className = 'status-dot warning';
+        text.textContent = 'Idle';
+      }
+    }
+
+    async function toggleMonitoring() {
+      const btn = document.getElementById('monitor-btn');
+      if (isMonitoring) {
+        await window.votebeats.stopMonitoring();
+        isMonitoring = false;
+        btn.textContent = 'Start Monitoring';
+        btn.classList.remove('active');
+      } else {
+        await window.votebeats.startMonitoring();
+        isMonitoring = true;
+        btn.textContent = 'Stop Monitoring';
+        btn.classList.add('active');
+      }
+      updateStatus();
+    }
+
+    function showPanel(panel) {
+      currentPanel = panel;
+      document.getElementById('queue-panel').style.display = panel === 'queue' ? 'block' : 'none';
+      document.getElementById('settings-panel').className = panel === 'settings' ? 'settings-panel show' : 'settings-panel';
+      document.getElementById('queue-tab').className = panel === 'queue' ? 'ctrl-btn active' : 'ctrl-btn';
+      document.getElementById('settings-tab').className = panel === 'settings' ? 'ctrl-btn active' : 'ctrl-btn';
+    }
+
+    async function toggleAutoStart(enabled) {
+      await window.votebeats.setAutoStart(enabled);
+    }
+
+    async function updateSetting(key, value) {
+      await window.votebeats.setStore(key, value);
+    }
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function updateTrackDisplay(track) {
+      if (!track) {
+        document.getElementById('no-track').style.display = 'block';
+        document.getElementById('track-display').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('no-track').style.display = 'none';
+      document.getElementById('track-display').style.display = 'block';
+      document.getElementById('track-title').textContent = track.title;
+      document.getElementById('track-artist').textContent = track.artist;
+
+      if (track.duration > 0) {
+        const pct = (track.position / track.duration) * 100;
+        document.getElementById('progress-fill').style.width = pct + '%';
+        document.getElementById('time-current').textContent = formatTime(track.position);
+        document.getElementById('time-total').textContent = formatTime(track.duration);
+      }
+    }
+
+    function showAlert(message) {
+      const banner = document.getElementById('alert-banner');
+      banner.textContent = message;
+      banner.classList.add('show');
+      setTimeout(() => banner.classList.remove('show'), 5000);
+    }
+
+    function showConfirmDialog(track) {
+      pendingTrack = track;
+      document.getElementById('confirm-track-info').textContent =
+        `"${track.title}" by ${track.artist}\n\nUpdate this as the currently playing song?`;
+      document.getElementById('confirm-overlay').classList.add('show');
+    }
+
+    function dismissConfirm() {
+      pendingTrack = null;
+      document.getElementById('confirm-overlay').classList.remove('show');
+    }
+
+    async function confirmNowPlaying() {
+      if (pendingTrack) {
+        await window.votebeats.confirmUpdate(pendingTrack);
+        showAlert(`Updated: ${pendingTrack.title} is now playing`);
+      }
+      dismissConfirm();
+    }
+
+    async function handleResetSetup() {
+      if (confirm('This will sign you out and reset all settings. Continue?')) {
+        await window.votebeats.resetSetup();
+      }
+    }
+
+    function handleOpenDashboard() {
+      // Will use shell.openExternal from main process
+      window.votebeats.getStore('serverUrl').then(url => {
+        const dashUrl = (url || 'http://localhost:3000').replace(':3002', ':3000') + '/dashboard';
+        // Fallback: show URL
+        showAlert('Open in browser: ' + dashUrl);
+      });
+    }
+
+    // IPC Event Listeners
+    window.votebeats.onTrackChanged((track) => {
+      updateTrackDisplay(track);
+    });
+
+    window.votebeats.onMonitoringStatus((data) => {
+      isMonitoring = data.isMonitoring;
+      const btn = document.getElementById('monitor-btn');
+      btn.textContent = isMonitoring ? 'Stop Monitoring' : 'Start Monitoring';
+      if (isMonitoring) btn.classList.add('active');
+      else btn.classList.remove('active');
+      updateStatus();
+    });
+
+    window.votebeats.onConfirmNowPlaying((track) => {
+      showConfirmDialog(track);
+    });
+
+    window.votebeats.onSongEndingSoon((data) => {
+      showAlert(`Song ending in ${data.remaining}s: ${data.track.title}`);
+    });
+
+    window.votebeats.onNowPlayingUpdated((data) => {
+      showAlert('Queue updated successfully');
+    });
+
+    window.votebeats.onNavigate((page) => {
+      if (page === 'settings') showPanel('settings');
+    });
+
+    // Initialize on load
+    init();
+    showPanel('queue');
+  </script>
+</body>
+</html>
