@@ -97,6 +97,18 @@ try { db.exec('ALTER TABLE requests ADD COLUMN song_genre TEXT'); } catch(e) { /
 try { db.exec('ALTER TABLE events ADD COLUMN edit_mode INTEGER DEFAULT 0'); } catch(e) { /* column exists */ }
 try { db.exec('ALTER TABLE events ADD COLUMN edit_mode_snapshot TEXT'); } catch(e) { /* column exists */ }
 
+// Create message_reads table for tracking which attendees have read messages
+db.exec(`
+  CREATE TABLE IF NOT EXISTS message_reads (
+    id TEXT PRIMARY KEY,
+    message_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    read_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(message_id, user_id),
+    FOREIGN KEY (message_id) REFERENCES messages(id)
+  );
+`);
+
 // Create settings_templates table
 db.exec(`
   CREATE TABLE IF NOT EXISTS settings_templates (

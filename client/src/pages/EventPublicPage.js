@@ -184,6 +184,12 @@ export default function EventPublicPage() {
       try {
         const msgs = await api.getEventMessages(eventId, attendeeId);
         setDjAnnouncements(msgs);
+        // Auto-mark displayed messages as read
+        for (const msg of (msgs || [])) {
+          try {
+            await api.markMessageRead(eventId, msg.id, attendeeId);
+          } catch (e) { /* ignore read-tracking errors */ }
+        }
       } catch (err) {
         console.error('Failed to fetch DJ messages');
       }

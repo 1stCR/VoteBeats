@@ -1911,6 +1911,9 @@ export default function EventManagePage() {
                                msg.targetAudience}
                             </span>
                           )}
+                          <span className="px-1.5 py-0.5 text-xs rounded-full font-medium bg-slate-100 text-slate-600 dark:bg-slate-600 dark:text-slate-300" data-read-count>
+                            {msg.readCount || 0} {(msg.readCount || 0) === 1 ? 'read' : 'reads'}
+                          </span>
                         </div>
                       </div>
                       <button

@@ -222,6 +222,12 @@ export const api = {
   deleteDJMessage: (eventId, messageId) =>
     apiRequest(`/api/events/${eventId}/messages/${messageId}`, { method: 'DELETE' }),
 
+  markMessageRead: (eventId, messageId, userId) =>
+    apiRequest(`/api/events/${eventId}/messages/${messageId}/read`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    }),
+
   // Templates
   getTemplates: () =>
     apiRequest('/api/templates'),

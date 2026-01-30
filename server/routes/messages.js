@@ -80,9 +80,18 @@ router.get('/events/:eventId/messages', (req, res) => {
       ORDER BY created_at DESC
     `).all(eventId);
 
-    // If no userId provided (e.g. DJ view), return all messages
+    // If no userId provided (e.g. DJ view), return all messages with read counts
     if (!userId) {
-      return res.json(messages.map(formatMessage));
+      const messagesWithReads = messages.map(msg => {
+        const readCount = db.prepare(
+          'SELECT COUNT(*) as cnt FROM message_reads WHERE message_id = ?'
+        ).get(msg.id);
+        return {
+          ...formatMessage(msg),
+          readCount: readCount?.cnt || 0,
+        };
+      });
+      return res.json(messagesWithReads);
     }
 
     // Filter messages based on target_audience and attendee activity
@@ -156,6 +165,64 @@ router.delete('/events/:eventId/messages/:messageId', authenticateToken, (req, r
   } catch (err) {
     console.error('Failed to delete message:', err);
     res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
+// POST /events/:eventId/messages/:messageId/read - Mark a message as read by attendee
+router.post('/events/:eventId/messages/:messageId/read', (req, res) => {
+  const { eventId, messageId } = req.params;
+  const { userId } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'userId is required' });
+  }
+
+  // Verify message exists and belongs to this event
+  const message = db.prepare('SELECT event_id FROM messages WHERE id = ?').get(messageId);
+  if (!message) {
+    return res.status(404).json({ error: 'Message not found' });
+  }
+  if (message.event_id !== eventId) {
+    return res.status(400).json({ error: 'Message does not belong to this event' });
+  }
+
+  try {
+    const readId = uuidv4();
+    db.prepare(`
+      INSERT OR IGNORE INTO message_reads (id, message_id, user_id)
+      VALUES (?, ?, ?)
+    `).run(readId, messageId, userId);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to mark message as read:', err);
+    res.status(500).json({ error: 'Failed to mark message as read' });
+  }
+});
+
+// GET /events/:eventId/messages/:messageId/reads - Get read stats for a message (DJ only)
+router.get('/events/:eventId/messages/:messageId/reads', authenticateToken, (req, res) => {
+  const { eventId, messageId } = req.params;
+  const djId = req.user.id;
+
+  // Verify event ownership
+  const event = db.prepare('SELECT dj_id FROM events WHERE id = ?').get(eventId);
+  if (!event) {
+    return res.status(404).json({ error: 'Event not found' });
+  }
+  if (event.dj_id !== djId) {
+    return res.status(403).json({ error: 'Not authorized' });
+  }
+
+  try {
+    const readCount = db.prepare(
+      'SELECT COUNT(*) as cnt FROM message_reads WHERE message_id = ?'
+    ).get(messageId);
+
+    res.json({ messageId, readCount: readCount?.cnt || 0 });
+  } catch (err) {
+    console.error('Failed to get read stats:', err);
+    res.status(500).json({ error: 'Failed to get read stats' });
   }
 });
 
