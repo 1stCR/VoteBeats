@@ -1,5 +1,44 @@
 ===== VoteBeats Development Progress =====
 
+=== Session: 2026-01-30 (Session 36) ===
+Status: 255/255 features passing (100%)
+
+REGRESSION TESTING:
+- Feature #114 (Attendee can view own vote history): PASSED
+  - Registered DJ (regtest_s36@test.com), created event "Regression Test Event 36"
+  - As attendee, requested Bohemian Rhapsody and Sweet Caroline
+  - Voted on both songs in Queue tab (both show 1 vote)
+  - Navigated to My Requests tab: both songs listed with vote counts and queue ranks
+  - Vote indicators correctly show on requested/voted songs
+
+- Feature #79 (Configurable request limits after vote close): PASSED
+  - Set post-close request limit to 1 in DJ Settings, saved settings
+  - Closed voting, then set event to Live -> End Event (status: completed)
+  - Attendee attempted 6th request (Yesterday by Beatles) after event completed
+  - Alert dialog: "Post-close request limit reached. Maximum 1 requests after event close."
+  - Post-close limit correctly enforced by backend (429 response)
+
+- Feature #16 (Firebase Security Rules block unauthorized access): PASSED
+  - GET /api/events without auth -> "Authentication required"
+  - POST /api/events without auth -> "Authentication required"
+  - PUT /api/events/:id without auth -> "Authentication required"
+  - All return proper 401 with "No token provided" message
+
+CONSOLE ERRORS: Only expected 429 from post-close limit test. Zero JavaScript bugs.
+NOTE: Backend server had crashed between sessions. Restarted on port 3002. Frontend on port 3000.
+
+ALL REGRESSION TESTS PASSED. No regressions found.
+
+SUMMARY:
+- All 255 features remain passing (100% complete)
+- No new features to implement
+- No bugs discovered
+- App is in working state with clean code
+
+NEXT SESSION:
+- All 255 features are passing (100% complete)
+- Continue regression testing to ensure stability
+
 === Session: 2026-01-30 (Session 35) ===
 Status: 255/255 features passing (100%)
 
