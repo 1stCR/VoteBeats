@@ -181,7 +181,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="py-8 px-4 sm:px-6 lg:px-8 border-t border-slate-200 dark:border-slate-700">
         <div className="max-w-7xl mx-auto text-center text-slate-600 dark:text-slate-400">
-          <p>&copy; 2025 VoteBeats. Let your crowd pick the beats.</p>
+          <p>&copy; 2025 VoteBeats. Let your crowd pick the beats. &middot; <Link to="/roadmap" className="text-primary-400 hover:text-primary-300 transition-colors">Feature Roadmap</Link></p>
         </div>
       </footer>
     </div>

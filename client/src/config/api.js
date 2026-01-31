@@ -277,6 +277,34 @@ export const api = {
   getFeedbackStats: () =>
     apiRequest('/api/feedback/stats'),
 
+  // Roadmap / Feature Request Board
+  getRoadmap: (params) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return apiRequest('/api/roadmap' + query);
+  },
+
+  createFeatureRequest: (data) =>
+    apiRequest('/api/roadmap', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  voteFeatureRequest: (id) =>
+    apiRequest('/api/roadmap/' + id + '/vote', {
+      method: 'POST',
+    }),
+
+  updateFeatureRequestStatus: (id, status) =>
+    apiRequest('/api/roadmap/' + id + '/status', {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    }),
+
+  deleteFeatureRequest: (id) =>
+    apiRequest('/api/roadmap/' + id, {
+      method: 'DELETE',
+    }),
+
   // Health
   healthCheck: () =>
     apiRequest('/api/health'),

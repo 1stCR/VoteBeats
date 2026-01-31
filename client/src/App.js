@@ -18,6 +18,7 @@ const EventManagePage = React.lazy(() => import('./pages/EventManagePage'));
 const ForgotPasswordPage = React.lazy(() => import('./pages/ForgotPasswordPage'));
 const EventPublicPage = React.lazy(() => import('./pages/EventPublicPage'));
 const SettingsPage = React.lazy(() => import('./pages/SettingsPage'));
+const RoadmapPage = React.lazy(() => import('./pages/RoadmapPage'));
 
 function LoadingFallback() {
   return (
@@ -79,6 +80,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/roadmap" element={<RoadmapPage />} />
         <Route path="/e/:eventId" element={<EventPublicPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

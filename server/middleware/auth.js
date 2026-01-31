@@ -26,6 +26,22 @@ function authenticateToken(req, res, next) {
   }
 }
 
+function optionalAuth(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+  try {
+    const user = jwt.verify(token, JWT_SECRET);
+    req.user = user;
+  } catch (err) {
+    req.user = null;
+  }
+  next();
+}
+
 function generateToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email, displayName: user.display_name },
@@ -34,4 +50,4 @@ function generateToken(user) {
   );
 }
 
-module.exports = { authenticateToken, generateToken, JWT_SECRET };
+module.exports = { authenticateToken, optionalAuth, generateToken, JWT_SECRET };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Music, LogOut, Plus, Calendar, Users, BarChart3, Settings, Sun, Moon, AlertTriangle, RefreshCw, WifiOff, MessageSquare, Star, Send, Bug, Lightbulb, Heart, X } from 'lucide-react';
+import { Music, LogOut, Plus, Calendar, Users, BarChart3, Settings, Sun, Moon, AlertTriangle, RefreshCw, WifiOff, MessageSquare, Star, Send, Bug, Lightbulb, Heart, X, Map } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { api } from '../config/api';
@@ -129,6 +129,15 @@ export default function DashboardPage() {
             <span className="text-sm text-slate-600 dark:text-slate-300 hidden sm:inline">
               Welcome, <span className="font-semibold">{currentUser?.displayName || 'DJ'}</span>
             </span>
+            <Link
+              to="/roadmap"
+              className="flex items-center gap-2 px-3 py-2.5 min-h-[44px] text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              title="Feature Roadmap"
+              data-roadmap-link
+            >
+              <Map className="w-5 h-5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Roadmap</span>
+            </Link>
             <button
               onClick={toggleTheme}
               className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"

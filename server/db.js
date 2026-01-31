@@ -144,4 +144,31 @@ db.exec(`
   );
 `);
 
+// Create feature_requests table for public roadmap
+db.exec(`
+  CREATE TABLE IF NOT EXISTS feature_requests (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'under_consideration',
+    author_id TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (author_id) REFERENCES users(id)
+  );
+`);
+
+// Create roadmap_votes table for feature request voting
+db.exec(`
+  CREATE TABLE IF NOT EXISTS roadmap_votes (
+    id TEXT PRIMARY KEY,
+    feature_request_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (feature_request_id) REFERENCES feature_requests(id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(feature_request_id, user_id)
+  );
+`);
+
 module.exports = db;

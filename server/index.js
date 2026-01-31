@@ -13,6 +13,7 @@ const templateRoutes = require('./routes/templates');
 const spotifyRoutes = require('./routes/spotify');
 const desktopRoutes = require('./routes/desktop');
 const feedbackRoutes = require('./routes/feedback');
+const roadmapRoutes = require('./routes/roadmap');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -76,6 +77,7 @@ app.use('/api/songs', songRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/spotify', spotifyRoutes);
 app.use('/api/desktop', desktopRoutes);
+app.use('/api', roadmapRoutes);
 app.use('/api', desktopRoutes); // Also mount at /api for /api/events/:eventId/now-playing and /api/events/:eventId/sync
 
 // Health check
