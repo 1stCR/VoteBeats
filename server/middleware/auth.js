@@ -1,6 +1,13 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'votebeats-dev-secret-key-change-in-production';
+const DEFAULT_DEV_SECRET = 'votebeats-dev-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_DEV_SECRET;
+
+// Warn if using default secret in production
+if (process.env.NODE_ENV === 'production' && JWT_SECRET === DEFAULT_DEV_SECRET) {
+  console.error('SECURITY WARNING: Using default JWT secret in production! Set JWT_SECRET environment variable.');
+  process.exit(1);
+}
 
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
