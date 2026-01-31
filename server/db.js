@@ -128,4 +128,20 @@ db.exec(`
   );
 `);
 
+// Create feedback table for in-app feedback collection
+db.exec(`
+  CREATE TABLE IF NOT EXISTS feedback (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    user_type TEXT NOT NULL DEFAULT 'attendee',
+    user_id TEXT,
+    feedback_type TEXT NOT NULL DEFAULT 'praise',
+    rating INTEGER,
+    message TEXT,
+    email TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (event_id) REFERENCES events(id)
+  );
+`);
+
 module.exports = db;

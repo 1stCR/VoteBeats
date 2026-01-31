@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Music, Search, Send, ThumbsUp, ListMusic, User, Link2, Flame, Clock, AlertTriangle, Bell, BellOff } from 'lucide-react';
+import { Music, Search, Send, ThumbsUp, ListMusic, User, Link2, Flame, Clock, AlertTriangle, Bell, BellOff, Star, MessageSquare, X, CheckCircle } from 'lucide-react';
 import { api } from '../config/api';
 
 function generateUUID() {
@@ -47,6 +47,15 @@ export default function EventPublicPage() {
   const [similarSongDialog, setSimilarSongDialog] = useState(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     return localStorage.getItem('votebeats_notifications') === 'enabled' && 'Notification' in window && Notification.permission === 'granted';
+  });
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState(0);
+  const [feedbackType, setFeedbackType] = useState('praise');
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackEmail, setFeedbackEmail] = useState('');
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(() => {
+    return localStorage.getItem(`votebeats_feedback_${eventId}`) === 'true';
   });
   const notifiedMessageIdsRef = useRef(new Set()); // { song, matches }
   const notificationsEnabledRef = useRef(notificationsEnabled);
@@ -289,6 +298,32 @@ export default function EventPublicPage() {
 
   function isExplicitBlocked() {
     return event && event.settings && event.settings.blockExplicit !== false;
+  }
+
+  async function handleSubmitFeedback(e) {
+    e.preventDefault();
+    if (!feedbackRating && !feedbackMessage.trim()) return;
+    setFeedbackSubmitting(true);
+    try {
+      await api.submitFeedback(eventId, {
+        feedbackType,
+        rating: feedbackRating || undefined,
+        message: feedbackMessage.trim() || undefined,
+        email: feedbackEmail.trim() || undefined,
+        userId: getAttendeeId(),
+        userType: 'attendee'
+      });
+      setFeedbackSubmitted(true);
+      localStorage.setItem(`votebeats_feedback_${eventId}`, 'true');
+      setShowFeedbackForm(false);
+      setFeedbackRating(0);
+      setFeedbackMessage('');
+      setFeedbackEmail('');
+    } catch (err) {
+      alert(err.message || 'Failed to submit feedback. Please try again.');
+    } finally {
+      setFeedbackSubmitting(false);
+    }
   }
 
   async function handleSubmitRequest(song, skipSimilarCheck = false) {
@@ -547,8 +582,111 @@ export default function EventPublicPage() {
           </div>
           <h1 className="text-2xl font-bold">{event.name}</h1>
                 {event.status === 'completed' && (
-                  <div id="event-status-banner" className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-center py-3 px-4 rounded-xl mb-4 text-sm font-medium">
-                    This event has ended. Song requests are no longer being accepted.
+                  <div id="event-status-banner" className="mb-4">
+                    <div className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-center py-3 px-4 rounded-xl text-sm font-medium">
+                      This event has ended. Song requests are no longer being accepted.
+                    </div>
+
+                    {/* Rate this event prompt */}
+                    {feedbackSubmitted ? (
+                      <div className="mt-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 text-center">
+                        <CheckCircle className="w-6 h-6 text-emerald-500 mx-auto mb-1" />
+                        <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Thanks for your feedback!</p>
+                      </div>
+                    ) : !showFeedbackForm ? (
+                      <div className="mt-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-800 rounded-xl p-4 text-center">
+                        <MessageSquare className="w-6 h-6 text-purple-500 mx-auto mb-2" />
+                        <h3 className="font-semibold text-slate-900 dark:text-white text-sm mb-1">Rate This Event</h3>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+                          Help the DJ improve! Share your experience.
+                        </p>
+                        <button
+                          onClick={() => setShowFeedbackForm(true)}
+                          className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all text-sm font-medium shadow-md"
+                          data-feedback-prompt
+                        >
+                          Leave Feedback
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="mt-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4" data-feedback-form>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Rate This Event</h3>
+                          <button onClick={() => setShowFeedbackForm(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <form onSubmit={handleSubmitFeedback}>
+                          {/* Star rating */}
+                          <div className="flex items-center justify-center gap-1 mb-3" role="radiogroup" aria-label="Event rating">
+                            {[1, 2, 3, 4, 5].map(star => (
+                              <button
+                                key={star}
+                                type="button"
+                                onClick={() => setFeedbackRating(star)}
+                                className="p-1 transition-transform hover:scale-110"
+                                aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                                role="radio"
+                                aria-checked={feedbackRating === star}
+                              >
+                                <Star className={`w-7 h-7 ${star <= feedbackRating ? 'fill-yellow-400 text-yellow-400' : 'text-slate-300 dark:text-slate-600'}`} />
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Feedback type */}
+                          <div className="flex gap-2 mb-3 justify-center">
+                            {[
+                              { value: 'praise', label: 'Praise' },
+                              { value: 'suggestion', label: 'Suggestion' },
+                              { value: 'bug', label: 'Bug Report' }
+                            ].map(opt => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => setFeedbackType(opt.value)}
+                                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                  feedbackType === opt.value
+                                    ? 'bg-purple-500 text-white'
+                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Message */}
+                          <textarea
+                            value={feedbackMessage}
+                            onChange={e => setFeedbackMessage(e.target.value)}
+                            placeholder="Share your thoughts (optional)..."
+                            className="w-full p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white placeholder-slate-400 resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            rows={3}
+                            aria-label="Feedback message"
+                            maxLength={500}
+                          />
+
+                          {/* Optional email */}
+                          <input
+                            type="email"
+                            value={feedbackEmail}
+                            onChange={e => setFeedbackEmail(e.target.value)}
+                            placeholder="Your email (optional, for follow-up)"
+                            className="w-full mt-2 p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            aria-label="Email address for follow-up"
+                          />
+
+                          <button
+                            type="submit"
+                            disabled={feedbackSubmitting || (!feedbackRating && !feedbackMessage.trim())}
+                            className="w-full mt-3 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all text-sm font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {feedbackSubmitting ? 'Submitting...' : 'Submit Feedback'}
+                          </button>
+                        </form>
+                      </div>
+                    )}
                   </div>
                 )}
                 {event.status === 'upcoming' && (

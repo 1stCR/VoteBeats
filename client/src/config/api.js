@@ -261,6 +261,22 @@ export const api = {
   disconnectSpotify: () =>
     apiRequest('/api/spotify/disconnect', { method: 'DELETE' }),
 
+  // Feedback
+  submitFeedback: (eventId, feedbackData) =>
+    apiRequest(`/api/events/${eventId}/feedback`, {
+      method: 'POST',
+      body: JSON.stringify(feedbackData),
+    }),
+
+  getEventFeedback: (eventId) =>
+    apiRequest(`/api/events/${eventId}/feedback`),
+
+  getAllFeedback: () =>
+    apiRequest('/api/feedback/all'),
+
+  getFeedbackStats: () =>
+    apiRequest('/api/feedback/stats'),
+
   // Health
   healthCheck: () =>
     apiRequest('/api/health'),

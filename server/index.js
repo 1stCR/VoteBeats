@@ -12,6 +12,7 @@ const twofaRoutes = require('./routes/twofa');
 const templateRoutes = require('./routes/templates');
 const spotifyRoutes = require('./routes/spotify');
 const desktopRoutes = require('./routes/desktop');
+const feedbackRoutes = require('./routes/feedback');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -69,6 +70,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/auth/2fa', twofaRoutes);
 app.use('/api', requestRoutes);
 app.use('/api', messageRoutes);
+app.use('/api', feedbackRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/songs', songRoutes);
 app.use('/api/templates', templateRoutes);
