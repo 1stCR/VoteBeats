@@ -342,6 +342,96 @@
     .alert-banner.show { display: block; }
     @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
 
+    /* Update Banner */
+    .update-banner {
+      display: none;
+      padding: 10px 20px;
+      background: linear-gradient(135deg, #1e3a5f, #1e40af);
+      border-bottom: 1px solid #3b82f6;
+      font-size: 12px;
+      color: #bfdbfe;
+      text-align: center;
+      animation: slideDown 0.3s ease;
+    }
+    .update-banner.show { display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .update-banner .update-text { flex: 1; }
+    .update-banner .update-btn {
+      padding: 5px 12px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .update-banner .update-btn:hover { background: #2563eb; }
+    .update-progress-bar {
+      width: 100%;
+      height: 3px;
+      background: #1e3a5f;
+      border-radius: 2px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+    .update-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6, #60a5fa);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.5s ease;
+    }
+
+    /* Toggle switch */
+    .toggle-group {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+    .toggle-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+    .toggle-switch {
+      position: relative;
+      width: 40px;
+      height: 22px;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: #334155;
+      border-radius: 11px;
+      transition: 0.3s;
+    }
+    .toggle-slider:before {
+      content: '';
+      position: absolute;
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background: #94a3b8;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background: #6366f1;
+    }
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(18px);
+      background: white;
+    }
+
     /* Footer */
     .footer {
       padding: 12px 20px;
@@ -361,6 +451,17 @@
   </style>
 </head>
 <body>
+  <!-- Update Banner -->
+  <div class="update-banner" id="update-banner">
+    <span class="update-text" id="update-text">Checking for updates...</span>
+    <button class="update-btn" id="update-action-btn" style="display: none;" onclick="handleUpdateAction()">Restart & Update</button>
+  </div>
+  <div id="update-progress-container" style="display: none;">
+    <div class="update-progress-bar">
+      <div class="update-progress-fill" id="update-progress-fill"></div>
+    </div>
+  </div>
+
   <!-- Alert Banner -->
   <div class="alert-banner" id="alert-banner"></div>
 
@@ -457,6 +558,22 @@
     <div class="setting-group">
       <label>DJ Account</label>
       <input type="text" id="settings-email" readonly>
+    </div>
+    <div class="setting-group">
+      <div class="toggle-group">
+        <span class="toggle-label">Start with system</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="auto-start-toggle" onchange="toggleAutoStart(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="setting-description">Automatically launch VoteBeats Helper when you log in.</div>
+    </div>
+    <div class="setting-group">
+      <button class="ctrl-btn" onclick="handleCheckForUpdates()" id="check-updates-btn" style="width: 100%;">
+        Check for Updates
+      </button>
+      <div class="setting-description" id="update-status-text">Current version: v1.0.0</div>
     </div>
     <div class="setting-group">
       <button class="ctrl-btn danger" onclick="handleResetSetup()" style="width: 100%;">
@@ -619,6 +736,93 @@
         showAlert('Open in browser: ' + dashUrl);
       });
     }
+
+    // Update management
+    let updateReady = false;
+    let updateVersion = null;
+
+    function showUpdateBanner(text, showButton, buttonText) {
+      const banner = document.getElementById('update-banner');
+      document.getElementById('update-text').textContent = text;
+      const btn = document.getElementById('update-action-btn');
+      if (showButton) {
+        btn.style.display = 'inline-block';
+        btn.textContent = buttonText || 'Restart & Update';
+      } else {
+        btn.style.display = 'none';
+      }
+      banner.classList.add('show');
+    }
+
+    function hideUpdateBanner() {
+      document.getElementById('update-banner').classList.remove('show');
+      document.getElementById('update-progress-container').style.display = 'none';
+    }
+
+    function handleUpdateAction() {
+      if (updateReady) {
+        window.votebeats.restartAndUpdate();
+      }
+    }
+
+    async function handleCheckForUpdates() {
+      const btn = document.getElementById('check-updates-btn');
+      const statusText = document.getElementById('update-status-text');
+      btn.textContent = 'Checking...';
+      btn.disabled = true;
+      try {
+        const result = await window.votebeats.checkForUpdates();
+        if (result.success && result.version) {
+          statusText.textContent = `Update available: v${result.version}`;
+        } else if (result.success) {
+          statusText.textContent = 'You are running the latest version.';
+        } else {
+          statusText.textContent = `Check failed: ${result.error || 'Unknown error'}`;
+        }
+      } catch (err) {
+        statusText.textContent = 'Could not check for updates.';
+      }
+      btn.textContent = 'Check for Updates';
+      btn.disabled = false;
+    }
+
+    // Update event listeners
+    window.votebeats.onUpdateChecking(() => {
+      // Silently checking - don't show banner on startup
+    });
+
+    window.votebeats.onUpdateAvailable((info) => {
+      updateVersion = info.version;
+      showUpdateBanner(`Downloading v${info.version}...`, false);
+      document.getElementById('update-progress-container').style.display = 'block';
+      document.getElementById('update-status-text').textContent = `Downloading v${info.version}...`;
+    });
+
+    window.votebeats.onUpdateNotAvailable(() => {
+      hideUpdateBanner();
+    });
+
+    window.votebeats.onUpdateDownloadProgress((data) => {
+      document.getElementById('update-progress-fill').style.width = data.percent + '%';
+      const mb = (data.transferred / 1024 / 1024).toFixed(1);
+      const totalMb = (data.total / 1024 / 1024).toFixed(1);
+      document.getElementById('update-text').textContent =
+        `Downloading v${updateVersion || '?'}... ${data.percent}% (${mb}/${totalMb} MB)`;
+    });
+
+    window.votebeats.onUpdateDownloaded((info) => {
+      updateReady = true;
+      updateVersion = info.version;
+      document.getElementById('update-progress-container').style.display = 'none';
+      showUpdateBanner(`v${info.version} ready to install`, true, 'Restart & Update');
+      document.getElementById('update-status-text').textContent = `v${info.version} ready - restart to apply`;
+    });
+
+    window.votebeats.onUpdateError((data) => {
+      hideUpdateBanner();
+      document.getElementById('update-status-text').textContent =
+        `Update error: ${data.message || 'Unknown error'}`;
+    });
 
     // IPC Event Listeners
     window.votebeats.onTrackChanged((track) => {

@@ -28,11 +28,23 @@ contextBridge.exposeInMainWorld('votebeats', {
   // Auto-update
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   restartAndUpdate: () => ipcRenderer.invoke('restart-and-update'),
+  onUpdateChecking: (callback) => {
+    ipcRenderer.on('update-checking', (event) => callback());
+  },
   onUpdateAvailable: (callback) => {
     ipcRenderer.on('update-available', (event, data) => callback(data));
   },
+  onUpdateNotAvailable: (callback) => {
+    ipcRenderer.on('update-not-available', (event, data) => callback(data));
+  },
+  onUpdateDownloadProgress: (callback) => {
+    ipcRenderer.on('update-download-progress', (event, data) => callback(data));
+  },
   onUpdateDownloaded: (callback) => {
     ipcRenderer.on('update-downloaded', (event, data) => callback(data));
+  },
+  onUpdateError: (callback) => {
+    ipcRenderer.on('update-error', (event, data) => callback(data));
   },
 
   // Auto-start

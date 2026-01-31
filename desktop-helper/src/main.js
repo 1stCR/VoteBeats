@@ -187,6 +187,30 @@ function updateTrayMenu() {
         }
       }
     },
+    {
+      label: 'Check for Updates',
+      click: async () => {
+        try {
+          const result = await autoUpdater.checkForUpdates();
+          if (!result || !result.updateInfo) {
+            if (Notification.isSupported()) {
+              new Notification({
+                title: 'No Updates',
+                body: 'You are running the latest version.'
+              }).show();
+            }
+          }
+        } catch (err) {
+          console.error('Manual update check failed:', err.message);
+          if (Notification.isSupported()) {
+            new Notification({
+              title: 'Update Check Failed',
+              body: 'Could not check for updates. Please check your internet connection.'
+            }).show();
+          }
+        }
+      }
+    },
     { type: 'separator' },
     {
       label: 'Quit VoteBeats Helper',
@@ -603,27 +627,66 @@ app.whenReady().then(() => {
   }
 
   // Auto-update check
-  autoUpdater.checkForUpdatesAndNotify();
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  try {
+    autoUpdater.checkForUpdatesAndNotify();
+  } catch (err) {
+    console.error('Auto-update check failed on startup:', err.message);
+  }
+
+  autoUpdater.on('checking-for-update', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-checking');
+    }
+  });
+
   autoUpdater.on('update-available', (info) => {
     if (Notification.isSupported()) {
       new Notification({
         title: 'Update Available',
-        body: 'A new version of VoteBeats Desktop Helper is available. Downloading...'
+        body: `Version ${info.version} is available. Downloading...`
       }).show();
     }
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('update-available', info);
     }
   });
+
+  autoUpdater.on('update-not-available', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-not-available', info);
+    }
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-download-progress', {
+        percent: Math.round(progress.percent),
+        transferred: progress.transferred,
+        total: progress.total,
+        bytesPerSecond: progress.bytesPerSecond
+      });
+    }
+  });
+
   autoUpdater.on('update-downloaded', (info) => {
     if (Notification.isSupported()) {
       new Notification({
         title: 'Update Ready',
-        body: 'Update downloaded. Restart to apply.'
+        body: `Version ${info.version} downloaded. Restart to apply.`
       }).show();
     }
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('update-downloaded', info);
+    }
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('Auto-update error:', err.message);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-error', { message: err.message });
     }
   });
 
