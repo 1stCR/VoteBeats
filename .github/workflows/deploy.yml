@@ -1,0 +1,161 @@
+# =============================================================================
+# VoteBeats CI/CD Pipeline
+# =============================================================================
+# Triggers on push to main branch:
+# 1. Build and test client and server
+# 2. Deploy client to Firebase Hosting
+# 3. Deploy server to Google Cloud Run
+# =============================================================================
+
+name: Build, Test & Deploy
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  NODE_VERSION: '18'
+  GCP_REGION: us-central1
+  CLOUD_RUN_SERVICE: votebeats-api
+  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
+
+jobs:
+  # =========================================================================
+  # Job 1: Build and Test
+  # =========================================================================
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            client/package-lock.json
+            server/package-lock.json
+
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Build client
+        working-directory: client
+        env:
+          REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
+          REACT_APP_FIREBASE_API_KEY: ${{ secrets.REACT_APP_FIREBASE_API_KEY }}
+          REACT_APP_FIREBASE_AUTH_DOMAIN: ${{ secrets.REACT_APP_FIREBASE_AUTH_DOMAIN }}
+          REACT_APP_FIREBASE_PROJECT_ID: ${{ secrets.REACT_APP_FIREBASE_PROJECT_ID }}
+          REACT_APP_FIREBASE_STORAGE_BUCKET: ${{ secrets.REACT_APP_FIREBASE_STORAGE_BUCKET }}
+          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.REACT_APP_FIREBASE_MESSAGING_SENDER_ID }}
+          REACT_APP_FIREBASE_APP_ID: ${{ secrets.REACT_APP_FIREBASE_APP_ID }}
+        run: npm run build
+
+      - name: Run client tests
+        working-directory: client
+        run: npm test -- --watchAll=false --passWithNoTests
+        env:
+          CI: true
+
+      - name: Upload client build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-build
+          path: client/build/
+          retention-days: 1
+
+  # =========================================================================
+  # Job 2: Deploy Client to Firebase Hosting
+  # =========================================================================
+  deploy-client:
+    name: Deploy Client to Firebase
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download client build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: client-build
+          path: client/build/
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+
+  # =========================================================================
+  # Job 3: Deploy Server to Google Cloud Run
+  # =========================================================================
+  deploy-server:
+    name: Deploy Server to Cloud Run
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }}
+
+      - name: Build Docker image
+        working-directory: server
+        run: |
+          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/votebeats/${{ env.CLOUD_RUN_SERVICE }}:${{ github.sha }} .
+          docker tag ${{ env.ARTIFACT_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/votebeats/${{ env.CLOUD_RUN_SERVICE }}:${{ github.sha }} \
+                     ${{ env.ARTIFACT_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/votebeats/${{ env.CLOUD_RUN_SERVICE }}:latest
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/votebeats/${{ env.CLOUD_RUN_SERVICE }}:${{ github.sha }}
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/votebeats/${{ env.CLOUD_RUN_SERVICE }}:latest
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.CLOUD_RUN_SERVICE }}
+          region: ${{ env.GCP_REGION }}
+          image: ${{ env.ARTIFACT_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/votebeats/${{ env.CLOUD_RUN_SERVICE }}:${{ github.sha }}
+          env_vars: |
+            NODE_ENV=production
+            CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}
+          secrets: |
+            JWT_SECRET=votebeats-jwt-secret:latest
+
+      - name: Verify deployment
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.CLOUD_RUN_SERVICE }} --region=${{ env.GCP_REGION }} --format='value(status.url)')
+          echo "Service URL: $SERVICE_URL"
+          curl -f "$SERVICE_URL/api/health" || exit 1
