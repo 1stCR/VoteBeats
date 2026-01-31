@@ -1,4 +1,40 @@
 ===== VoteBeats Development Progress =====
+=== Session: 2026-01-31 (Session 121) ===
+Status: 273/276 features passing (98.9%)
+
+SERVERS:
+- Backend restarted on port 3002 (was down between sessions)
+- Frontend running on port 3000
+
+REGRESSION TESTING:
+- Feature #108 (Votes locked when song becomes Now Playing): PASSED
+  - Created test account "DJ Regression121" (regression121@test.com)
+  - Created event "Regression Test Dance 121"
+  - Submitted "Bohemian Rhapsody" by Queen via public event page
+  - Voted on the song (1 vote recorded)
+  - DJ marked song as "Now Playing" on manage page
+  - Song removed from public voting queue (Live Queue: 0)
+  - "My Requests" shows "Now Playing" status with vote count preserved at 1
+  - No way to add new votes - votes effectively locked
+
+- Feature #245 (PUT /api/events/:eventId updates event): PASSED
+  - PUT request with updated name/location returned 200 with updated data
+  - GET confirmed changes persisted: "Updated Regression Dance 121", "Updated Venue"
+  - Non-owner DJ received 404 (authorization enforced - event scoped to owner)
+  - Dashboard UI confirmed update reflected correctly
+
+CONSOLE ERRORS: Zero JavaScript errors detected.
+
+REMAINING FEATURES (3): All blocked by external infrastructure
+- Feature #261: Custom domain with SSL (needs domain purchase + DNS)
+- Feature #269: Package Electron app (needs code signing certs)
+- Feature #270: Electron auto-update (needs GitHub releases)
+
+SUMMARY:
+- 273/276 features passing (98.9%) - no regressions
+- Application stable, zero console errors
+- All implementable features complete
+
 === Session: 2026-01-31 (Session 120) ===
 Status: 273/276 features passing (98.9%)
 
