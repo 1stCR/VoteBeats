@@ -46,8 +46,11 @@ app.use('/api', generalLimiter);
 app.use('/api/auth', authLimiter);
 
 // Middleware
+const corsOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
+  : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'];
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
+  origin: corsOrigins,
   credentials: true,
   exposedHeaders: ['RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset']
 }));
