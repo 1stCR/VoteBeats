@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Save, ArrowLeft, CheckCircle, Shield, ShieldCheck, ShieldOff, Lock, Eye, EyeOff, Bell, Volume2, Sliders, Music, Link2, Unlink2, ExternalLink  } from 'lucide-react';
+import { User, Mail, Save, ArrowLeft, CheckCircle, Shield, ShieldCheck, ShieldOff, Lock, Eye, EyeOff, Bell, Volume2, Sliders, Music, Link2, Unlink2, ExternalLink, BookOpen, RotateCcw  } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../config/api';
+import { resetOnboarding } from '../components/OnboardingWalkthrough';
 
 export default function SettingsPage() {
   const { currentUser, updateUser, logout } = useAuth();
@@ -62,6 +63,9 @@ export default function SettingsPage() {
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifSuccess, setNotifSuccess] = useState('');
   const [notifError, setNotifError] = useState('');
+
+  // Tutorial replay state
+  const [tutorialReset, setTutorialReset] = useState(false);
 
 
   // Load 2FA status on mount
@@ -941,6 +945,39 @@ export default function SettingsPage() {
               </button>
             </div>
           )}
+        </div>
+
+        {/* Onboarding Tutorial Section */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-primary-500" />
+            Getting Started Tutorial
+          </h2>
+
+          {tutorialReset && (
+            <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-lg text-sm flex items-center gap-2 mb-4">
+              <CheckCircle className="w-4 h-4" />
+              Tutorial has been reset! You'll see the walkthrough next time you visit the dashboard.
+            </div>
+          )}
+
+          <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+            The onboarding walkthrough guides you through setting up VoteBeats, creating events, sharing with attendees, and managing your queue.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => {
+              resetOnboarding();
+              setTutorialReset(true);
+              setTimeout(() => setTutorialReset(false), 5000);
+            }}
+            className="px-4 py-2.5 border border-primary-300 dark:border-primary-700 text-primary-600 dark:text-primary-400 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors text-sm font-medium flex items-center gap-2"
+            data-replay-tutorial
+          >
+            <RotateCcw className="w-4 h-4" />
+            Replay Tutorial
+          </button>
         </div>
 
         {/* Account Info Section */}
