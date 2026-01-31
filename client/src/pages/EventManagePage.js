@@ -735,13 +735,40 @@ export default function EventManagePage() {
   }
 
   if (error && !event) {
+    const isNetworkError = error.includes('fetch') || error.includes('network') || error.includes('Network') || error.includes('connect');
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-500 mb-4">{error}</p>
-          <button onClick={() => navigate('/dashboard')} className="text-primary-500 hover:underline">
-            Back to Dashboard
-          </button>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-6">
+        <div className="text-center max-w-sm">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full mb-4">
+            {isNetworkError ? (
+              <WifiOff className="w-8 h-8 text-red-400" />
+            ) : (
+              <AlertTriangle className="w-8 h-8 text-red-400" />
+            )}
+          </div>
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+            {isNetworkError ? 'Connection Problem' : 'Failed to Load Event'}
+          </h3>
+          <p className="text-slate-500 dark:text-slate-400 mb-6">
+            {isNetworkError
+              ? 'Unable to reach the server. Check your internet connection and try again.'
+              : error}
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => { setError(''); setLoading(true); loadEvent(); }}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-primary-500 text-white font-semibold rounded-xl hover:bg-primary-600 transition-colors w-full sm:w-auto justify-center"
+              data-retry-button
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="inline-flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors w-full sm:w-auto justify-center"
+            >
+              Back to Dashboard
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -883,8 +910,19 @@ export default function EventManagePage() {
       <div className="flex-1 flex flex-col min-h-screen">
         <main className="flex-1 p-4 pt-16 lg:p-8 lg:pt-8 max-w-4xl w-full">
           {error && (
-            <div className="mb-6 bg-red-500/10 border border-red-500/50 rounded-lg p-3 text-red-600 dark:text-red-400 text-sm">
-              {error}
+            <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-start gap-3" data-inline-error>
+              <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-700 dark:text-red-300">{error}</p>
+                <p className="text-xs text-red-500 dark:text-red-400 mt-1">This action may not have been saved. Please try again.</p>
+              </div>
+              <button
+                onClick={() => setError('')}
+                className="text-red-400 hover:text-red-600 dark:hover:text-red-300 flex-shrink-0"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           )}
 

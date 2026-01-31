@@ -493,11 +493,31 @@ export default function EventPublicPage() {
   }
 
   if (error || !event) {
+    const isNetworkError = error && (error.includes('fetch') || error.includes('network') || error.includes('Network') || error.includes('connect'));
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Event Not Found</h2>
-          <p className="text-slate-500">This event doesn't exist or is no longer available.</p>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-6">
+        <div className="text-center max-w-sm">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full mb-4">
+            {isNetworkError ? (
+              <AlertTriangle className="w-8 h-8 text-amber-400" />
+            ) : (
+              <Music className="w-8 h-8 text-slate-400" />
+            )}
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            {isNetworkError ? 'Connection Problem' : 'Event Not Found'}
+          </h2>
+          <p className="text-slate-500 dark:text-slate-400 mb-6">
+            {isNetworkError
+              ? 'Unable to reach the server. Check your internet connection and try again.'
+              : "This event doesn't exist or is no longer available."}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-primary-500 text-white font-semibold rounded-xl hover:bg-primary-600 transition-colors"
+          >
+            Try Again
+          </button>
         </div>
       </div>
     );
@@ -713,6 +733,14 @@ export default function EventPublicPage() {
               </div>
 
               {searching && <p className="text-sm text-slate-500 mb-4">Searching...</p>}
+
+              {!searching && searchQuery.trim() && searchResults.length === 0 && (
+                <div className="text-center py-6 mb-4" data-no-search-results>
+                  <Search className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">No results found</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">Try a different search term or enter the song manually below.</p>
+                </div>
+              )}
 
               {searchResults.length > 0 && (
                 <div className="space-y-2 mb-4">

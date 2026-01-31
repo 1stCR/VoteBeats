@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Music, LogOut, Plus, Calendar, Users, BarChart3, Settings, Sun, Moon } from 'lucide-react';
+import { Music, LogOut, Plus, Calendar, Users, BarChart3, Settings, Sun, Moon, AlertTriangle, RefreshCw, WifiOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { api } from '../config/api';
@@ -12,6 +12,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
@@ -20,17 +21,24 @@ export default function DashboardPage() {
 
   // Show onboarding for first-time DJs after events have loaded
   useEffect(() => {
-    if (!loading && events.length === 0 && !hasCompletedOnboarding()) {
+    if (!loading && !loadError && events.length === 0 && !hasCompletedOnboarding()) {
       setShowOnboarding(true);
     }
-  }, [loading, events]);
+  }, [loading, loadError, events]);
 
   async function loadEvents() {
+    setLoadError('');
+    setLoading(true);
     try {
       const data = await api.getEvents();
       setEvents(Array.isArray(data) ? data : data.events || []);
     } catch (err) {
       console.error('Failed to load events:', err);
+      setLoadError(
+        err.message?.includes('fetch') || err.message?.includes('network') || err.message?.includes('Network')
+          ? 'Unable to connect to the server. Please check your internet connection.'
+          : 'Failed to load your events. Please try again.'
+      );
       setEvents([]);
     } finally {
       setLoading(false);
@@ -149,6 +157,30 @@ export default function DashboardPage() {
                   <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/3" />
                 </div>
               ))}
+            </div>
+          ) : loadError ? (
+            <div className="text-center py-12" data-load-error>
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full mb-4">
+                {loadError.includes('connect') || loadError.includes('internet') ? (
+                  <WifiOff className="w-8 h-8 text-red-400" />
+                ) : (
+                  <AlertTriangle className="w-8 h-8 text-red-400" />
+                )}
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                {loadError.includes('connect') || loadError.includes('internet') ? 'Connection Problem' : 'Something went wrong'}
+              </h3>
+              <p className="text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
+                {loadError}
+              </p>
+              <button
+                onClick={loadEvents}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-primary-500 text-white font-semibold rounded-xl hover:bg-primary-600 transition-colors"
+                data-retry-button
+              >
+                <RefreshCw className="w-5 h-5" />
+                Try Again
+              </button>
             </div>
           ) : events.length === 0 ? (
             <div className="text-center py-12">
