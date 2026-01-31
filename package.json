@@ -9,9 +9,13 @@
     "build": "npm --prefix client run build",
     "start:server": "npm --prefix server start",
     "deploy": "npm run build && firebase deploy --only hosting",
-    "start": "npm run dev"
+    "start": "npm run dev",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:report": "npx playwright show-report"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.1",
     "concurrently": "^9.2.1"
   },
   "engines": {
