@@ -1,0 +1,127 @@
+# =============================================================================
+# VoteBeats Load Test Configuration
+# =============================================================================
+# Simulates a busy dance event with many concurrent attendees.
+#
+# Usage:
+#   npx artillery run loadtest/load-test.yml
+#   npx artillery run loadtest/load-test.yml --target http://your-staging-url.com
+#
+# Scenarios:
+#   1. Attendees browsing event page (100+ concurrent)
+#   2. Song search requests (50+ concurrent)
+#   3. Vote submission burst (50 in 10 seconds)
+#   4. Song request submissions (20 concurrent)
+# =============================================================================
+
+config:
+  target: "http://localhost:3002"
+  phases:
+    # Warm-up: 10 users/sec for 30 seconds
+    - duration: 30
+      arrivalRate: 10
+      name: "Warm-up"
+    # Ramp-up: 10 to 100 users/sec over 60 seconds
+    - duration: 60
+      arrivalRate: 10
+      rampTo: 100
+      name: "Ramp-up to peak load"
+    # Sustained peak: 100 users/sec for 60 seconds
+    - duration: 60
+      arrivalRate: 100
+      name: "Sustained peak load"
+    # Cool-down: 100 to 10 users/sec over 30 seconds
+    - duration: 30
+      arrivalRate: 100
+      rampTo: 10
+      name: "Cool-down"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+  ensure:
+    # Performance thresholds
+    thresholds:
+      - http.response_time.p95: 2000  # 95th percentile < 2 seconds
+      - http.response_time.p99: 5000  # 99th percentile < 5 seconds
+    conditions:
+      - expression: "http.codes.200 / http.requests > 0.95"
+        strict: false
+
+scenarios:
+  # =========================================================================
+  # Scenario 1: Attendee browses event page (most common)
+  # Weight: 40% of traffic
+  # =========================================================================
+  - name: "Browse event page"
+    weight: 40
+    flow:
+      - get:
+          url: "/api/health"
+      - think: 1
+      # Simulate polling for event data
+      - loop:
+          - get:
+              url: "/api/events/{{ $randomString() }}/public"
+              capture:
+                - json: "$"
+                  as: "eventData"
+          - think: 3
+        count: 5
+
+  # =========================================================================
+  # Scenario 2: Song search (iTunes API proxy)
+  # Weight: 25% of traffic
+  # =========================================================================
+  - name: "Search for songs"
+    weight: 25
+    flow:
+      - get:
+          url: "/api/songs/search?q=Bohemian%20Rhapsody"
+      - think: 2
+      - get:
+          url: "/api/songs/search?q=Shape%20of%20You"
+      - think: 2
+      - get:
+          url: "/api/songs/search?q=Happy%20Pharrell"
+      - think: 1
+      - get:
+          url: "/api/songs/search?q=Blinding%20Lights"
+
+  # =========================================================================
+  # Scenario 3: Vote submission burst
+  # Weight: 20% of traffic
+  # =========================================================================
+  - name: "Vote on songs"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/events/test-event/requests/test-request/vote"
+          json:
+            attendeeId: "load-test-{{ $randomString() }}"
+      - think: 1
+      - post:
+          url: "/api/events/test-event/requests/test-request-2/vote"
+          json:
+            attendeeId: "load-test-{{ $randomString() }}"
+
+  # =========================================================================
+  # Scenario 4: Song request submission
+  # Weight: 15% of traffic
+  # =========================================================================
+  - name: "Submit song requests"
+    weight: 15
+    flow:
+      - post:
+          url: "/api/events/test-event/requests"
+          json:
+            title: "Load Test Song {{ $randomNumber(1, 1000) }}"
+            artist: "Load Test Artist"
+            attendeeId: "load-test-{{ $randomString() }}"
+            nickname: "LoadTester"
+      - think: 2
+      - post:
+          url: "/api/events/test-event/requests"
+          json:
+            title: "Another Test Song {{ $randomNumber(1, 1000) }}"
+            artist: "Another Test Artist"
+            attendeeId: "load-test-{{ $randomString() }}"
