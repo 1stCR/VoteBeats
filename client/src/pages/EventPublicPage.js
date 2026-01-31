@@ -581,7 +581,7 @@ export default function EventPublicPage() {
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4">
+      <div id="main-content" className="max-w-2xl mx-auto px-4">
         {djAnnouncements.length > 0 && (
           <div className="mt-4 mb-2 space-y-2">
             {djAnnouncements.map(msg => (
@@ -617,12 +617,14 @@ export default function EventPublicPage() {
           })}
         </nav>
 
+        <div aria-live="assertive" role="alert">
         {voteError && (
           <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300 flex items-center gap-2" data-vote-error>
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01" /></svg>
             {voteError}
           </div>
         )}
+        </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-b-xl shadow-sm border border-t-0 border-slate-200 dark:border-slate-700 p-4 mb-8">
           {activeTab === 'request' && (
@@ -674,11 +676,13 @@ export default function EventPublicPage() {
               )}
               <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Request a Song</h2>
 
+              <div aria-live="polite" role="status">
               {submitSuccess && (
                 <div className="mb-4 bg-green-500/10 border border-green-500/50 rounded-lg p-3 text-green-600 dark:text-green-400 text-sm">
                   "{submitSuccess}" has been requested!
                 </div>
               )}
+              </div>
 
               <div className="mb-4">
                 <input
@@ -686,6 +690,7 @@ export default function EventPublicPage() {
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
                   placeholder="Your name (optional)"
+                  aria-label="Your name (optional)"
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none mb-3"
                 />
                 
@@ -707,6 +712,7 @@ export default function EventPublicPage() {
                       value={codeWord}
                       onChange={(e) => setCodeWord(e.target.value.trim())}
                       placeholder="Enter code word..."
+                      aria-label="Cross-device code word"
                       className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-1 focus:ring-primary-500 outline-none"
                     />
                     {codeWordLinked && <span className="text-xs text-green-500">✓ Linked</span>}
@@ -719,6 +725,7 @@ export default function EventPublicPage() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                     placeholder="Search for a song..."
+                    aria-label="Search for a song"
                     className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
                   />
                   <button
@@ -747,7 +754,7 @@ export default function EventPublicPage() {
                   {searchResults.map((song, i) => (
                     <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                       {(song.artworkUrl100 || song.albumArtUrl) && (
-                        <img src={song.artworkUrl100 || song.albumArtUrl} alt="" className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
+                        <img src={song.artworkUrl100 || song.albumArtUrl} alt={`Album art for ${song.trackName || song.title}`} className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{song.trackName || song.title}</p>
@@ -786,6 +793,7 @@ export default function EventPublicPage() {
                           value={manualTitle}
                           onChange={(e) => setManualTitle(e.target.value)}
                           placeholder="Song title *"
+                          aria-label="Song title"
                           className="w-full px-3 py-2 border border-slate-300 dark:border-slate-500 rounded-lg bg-white dark:bg-slate-600 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
                         />
                         <input
@@ -793,6 +801,7 @@ export default function EventPublicPage() {
                           value={manualArtist}
                           onChange={(e) => setManualArtist(e.target.value)}
                           placeholder="Artist name *"
+                          aria-label="Artist name"
                           className="w-full px-3 py-2 border border-slate-300 dark:border-slate-500 rounded-lg bg-white dark:bg-slate-600 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
                         />
                         <div className="flex gap-2">
@@ -823,6 +832,7 @@ export default function EventPublicPage() {
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="Add a message to the DJ (optional)"
+                  aria-label="Message to the DJ (optional)"
                   rows={2}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none resize-none"
                 />
@@ -859,7 +869,7 @@ export default function EventPublicPage() {
                       {requests.filter(r => r.status === 'nowPlaying').map(req => (
                         <div key={req.id} className="flex items-center gap-3 p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800">
                           {req.song?.albumArtUrl && (
-                            <img src={req.song.albumArtUrl} alt="" className="w-12 h-12 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
+                            <img src={req.song.albumArtUrl} alt={`Album art for ${req.song?.title || 'song'}`} className="w-12 h-12 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{req.song?.title}</p>
@@ -888,7 +898,7 @@ export default function EventPublicPage() {
                       {requests.filter(r => (r.status === 'queued' || r.status === 'pending') && r.requestedBy?.userId === attendeeId).map(req => (
                         <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                           {req.song?.albumArtUrl && (
-                            <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
+                            <img src={req.song.albumArtUrl} alt={`Album art for ${req.song?.title || 'song'}`} className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{req.song?.title}</p>
@@ -959,7 +969,7 @@ export default function EventPublicPage() {
                             {index + 1}
                           </span>
                           {req.song?.albumArtUrl && (
-                            <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
+                            <img src={req.song.albumArtUrl} alt={`Album art for ${req.song?.title || 'song'}`} className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
@@ -1039,7 +1049,7 @@ export default function EventPublicPage() {
                     return (
                     <div key={req.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                       {req.song?.albumArtUrl && (
-                        <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
+                        <img src={req.song.albumArtUrl} alt={`Album art for ${req.song?.title || 'song'}`} className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{req.song?.title}</p>
@@ -1081,7 +1091,7 @@ export default function EventPublicPage() {
                   {myVotes.map(req => (
                     <div key={req.id} className="flex items-center gap-3 p-3 bg-primary-50 dark:bg-primary-900/10 rounded-lg border border-primary-200 dark:border-primary-800">
                       {req.song?.albumArtUrl && (
-                        <img src={req.song.albumArtUrl} alt="" className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
+                        <img src={req.song.albumArtUrl} alt={`Album art for ${req.song?.title || 'song'}`} className="w-10 h-10 rounded bg-slate-200 dark:bg-slate-700" loading="lazy" />
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{req.song?.title}</p>

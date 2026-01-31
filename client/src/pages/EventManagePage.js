@@ -908,7 +908,7 @@ export default function EventManagePage() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-screen">
-        <main className="flex-1 p-4 pt-16 lg:p-8 lg:pt-8 max-w-4xl w-full">
+        <main id="main-content" className="flex-1 p-4 pt-16 lg:p-8 lg:pt-8 max-w-4xl w-full">
           {error && (
             <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-start gap-3" data-inline-error>
               <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
