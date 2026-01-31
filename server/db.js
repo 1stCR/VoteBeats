@@ -171,4 +171,28 @@ db.exec(`
   );
 `);
 
+// Create domain_config table for custom domain setup
+db.exec(`
+  CREATE TABLE IF NOT EXISTS domain_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    custom_domain TEXT,
+    domain_verified INTEGER DEFAULT 0,
+    ssl_provisioned INTEGER DEFAULT 0,
+    www_redirect TEXT DEFAULT 'www_to_apex',
+    dns_configured INTEGER DEFAULT 0,
+    cors_updated INTEGER DEFAULT 0,
+    spotify_redirect_updated INTEGER DEFAULT 0,
+    firebase_hosting_configured INTEGER DEFAULT 0,
+    setup_completed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+`);
+
+// Ensure a single config row exists
+const domainRow = db.prepare('SELECT id FROM domain_config WHERE id = 1').get();
+if (!domainRow) {
+  db.prepare('INSERT INTO domain_config (id) VALUES (1)').run();
+}
+
 module.exports = db;

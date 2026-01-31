@@ -4,10 +4,18 @@
   },
   "hosting": {
     "public": "client/build",
+    "site": "votebeats",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "redirects": [
+      {
+        "source": "/__/hosting/www-redirect{,/**}",
+        "destination": "https://votebeats.com/:splat",
+        "type": 301
+      }
     ],
     "rewrites": [
       {

@@ -305,6 +305,19 @@ export const api = {
       method: 'DELETE',
     }),
 
+  // Domain Configuration
+  getDomainConfig: () =>
+    apiRequest('/api/domain/config'),
+
+  updateDomainConfig: (config) =>
+    apiRequest('/api/domain/config', {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    }),
+
+  getDnsInstructions: () =>
+    apiRequest('/api/domain/dns-instructions'),
+
   // Health
   healthCheck: () =>
     apiRequest('/api/health'),
