@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// =============================================================================
+// VoteBeats - Firestore Security Rules
+// =============================================================================
+// The primary data layer is Express + SQLite. Firestore is used only for
+// Firebase Authentication. All data operations go through the Express API.
+// Therefore, deny ALL direct Firestore reads and writes by default.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default: deny all reads and writes to all collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // If real-time Firestore collections are added in the future,
+    // add scoped rules here with proper authentication checks.
+    // Example:
+    //
+    // match /events/{eventId}/liveQueue/{requestId} {
+    //   allow read: if true;  // Public read for attendees
+    //   allow write: if request.auth != null;  // Only authenticated DJs
+    // }
+  }
+}
