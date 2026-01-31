@@ -8,13 +8,28 @@ const { findFuzzyMatches } = require('../utils/fuzzyMatch');
 
 const router = express.Router();
 
+// Helper to safely parse settings that may be double-encoded
+function parseSettings(raw) {
+  if (!raw) return {};
+  if (typeof raw === 'object') return raw;
+  try {
+    let parsed = JSON.parse(raw);
+    if (typeof parsed === 'string') {
+      parsed = JSON.parse(parsed);
+    }
+    return parsed || {};
+  } catch (e) {
+    return {};
+  }
+}
+
 // Helper: Check queue health and auto-generate a DJ message if queue is low
 function checkQueueHealthAndNotify(eventId) {
   try {
     const event = db.prepare('SELECT id, dj_id, settings FROM events WHERE id = ?').get(eventId);
     if (!event) return;
 
-    const settings = JSON.parse(event.settings || '{}');
+    const settings = parseSettings(event.settings);
     const threshold = settings.lowQueueThreshold;
     if (!threshold || threshold <= 0) return;
 
@@ -56,7 +71,7 @@ function checkVoteCloseAndNotify(eventId) {
     const event = db.prepare('SELECT id, dj_id, settings FROM events WHERE id = ?').get(eventId);
     if (!event) return;
 
-    const settings = JSON.parse(event.settings || '{}');
+    const settings = parseSettings(event.settings);
 
     // Only applies to scheduled vote close mode with a close time set
     if (settings.votingCloseMode !== 'scheduled' || !settings.votingCloseTime) return;
@@ -153,7 +168,7 @@ function checkEventStartAndNotify(eventId) {
         const minutesLeft = Math.ceil(diff / (60 * 1000));
         const messageId = uuidv4();
         const location = event.start_time ? ' at ' + event.start_time : '';
-        const venue = (() => { try { return JSON.parse(event.settings || '{}').location || ''; } catch(e) { return ''; } })();
+        const venue = (() => { try { return parseSettings(event.settings).location || ''; } catch(e) { return ''; } })();
         const content = minutesLeft <= 10
           ? `🎉 The event is starting in just ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}! Get your song requests in now!`
           : `🎶 The event starts in ${minutesLeft} minutes${location}! Make sure your favorite songs are in the queue!`;
@@ -212,7 +227,7 @@ router.get('/events/:eventId/public', (req, res) => {
       location: event.location,
       description: event.description,
       status: event.status,
-      settings: JSON.parse(event.settings || '{}')
+      settings: parseSettings(event.settings)
     });
   } catch (err) {
     console.error('Get public event error:', err);
@@ -282,7 +297,7 @@ router.post('/events/:eventId/requests', (req, res) => {
     }
 
     // Check request limit per attendee
-    const settings = JSON.parse(event.settings || '{}');
+    const settings = parseSettings(event.settings);
     if (settings.requestLimit && settings.requestLimit > 0) {
       const existingCount = db.prepare('SELECT COUNT(*) as count FROM requests WHERE event_id = ? AND requested_by = ?')
         .get(eventId, requestedBy).count;
@@ -814,7 +829,7 @@ router.post('/events/:eventId/requests/:requestId/vote', (req, res) => {
     // Check voting schedule
     const event = db.prepare('SELECT settings FROM events WHERE id = ?').get(req.params.eventId);
     if (event) {
-      const settings = JSON.parse(event.settings || '{}');
+      const settings = parseSettings(event.settings);
       if (settings.votingSchedule === 'scheduled' && settings.votingOpenTime) {
         const openTime = new Date(settings.votingOpenTime).getTime();
         if (Date.now() < openTime) {
@@ -829,7 +844,7 @@ router.post('/events/:eventId/requests/:requestId/vote', (req, res) => {
 
     // Check if voting is closed (manually or scheduled)
     if (event) {
-      const closeSettings = JSON.parse(event.settings || '{}');
+      const closeSettings = parseSettings(event.settings);
       if (closeSettings.votingClosed) {
         return res.status(403).json({
           error: 'Voting is currently closed.',

@@ -47,15 +47,15 @@ export default function EventCreatePage() {
         end_time: form.endTime || null,
         description: form.description.trim() || null,
       };
-      // Apply default settings if available
+      // Apply default settings if available (send as object, server will stringify)
       if (defaultSettings) {
-        eventData.settings = JSON.stringify({
+        eventData.settings = {
           blockExplicit: defaultSettings.blockExplicit || false,
           votingEnabled: defaultSettings.votingEnabled !== false,
           requestsOpen: defaultSettings.requestsOpen !== false,
           maxRequestsPerUser: defaultSettings.maxRequestsPerUser || 0,
           autoApprove: defaultSettings.autoApprove || false,
-        });
+        };
       }
       await api.createEvent(eventData);
       navigate('/dashboard');

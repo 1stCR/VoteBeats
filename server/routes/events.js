@@ -6,6 +6,37 @@ const { sanitizeString } = require('../utils/sanitize');
 
 const router = express.Router();
 
+// Helper to safely parse settings that may be double-encoded
+function parseSettings(raw) {
+  if (!raw) return {};
+  if (typeof raw === 'object') return raw;
+  try {
+    let parsed = JSON.parse(raw);
+    // Handle double-encoded: if we parsed and got a string, parse again
+    if (typeof parsed === 'string') {
+      parsed = JSON.parse(parsed);
+    }
+    return parsed || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+// Helper to ensure settings is a proper JSON string for DB storage
+function settingsToJson(settings) {
+  if (!settings) return JSON.stringify({});
+  if (typeof settings === 'string') {
+    // If already a string, check if it's valid JSON
+    try {
+      JSON.parse(settings);
+      return settings; // Already a valid JSON string
+    } catch (e) {
+      return JSON.stringify({});
+    }
+  }
+  return JSON.stringify(settings);
+}
+
 // ALL event management routes require authentication
 router.use(authenticateToken);
 
@@ -24,7 +55,7 @@ router.post('/', (req, res) => {
     const cleanDescription = description ? sanitizeString(description) : null;
 
     const id = uuidv4();
-    const settingsJson = JSON.stringify(settings || {});
+    const settingsJson = settingsToJson(settings);
 
     db.prepare(`INSERT INTO events (id, dj_id, name, date, start_time, end_time, location, description, settings)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -89,7 +120,7 @@ router.put('/:id', (req, res) => {
       settings = COALESCE(?, settings),
       updated_at = datetime('now')
       WHERE id = ?`)
-      .run(cleanName, date, startTime, endTime, cleanLocation, cleanDescription, status, settings ? JSON.stringify(settings) : null, req.params.id);
+      .run(cleanName, date, startTime, endTime, cleanLocation, cleanDescription, status, settings ? settingsToJson(settings) : null, req.params.id);
 
     const updated = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
     res.json(formatEvent(updated));
@@ -131,7 +162,7 @@ function formatEvent(event) {
     location: event.location,
     description: event.description,
     status: event.status,
-    settings: JSON.parse(event.settings || '{}'),
+    settings: parseSettings(event.settings),
     createdAt: event.created_at,
     updatedAt: event.updated_at
   };
