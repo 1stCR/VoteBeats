@@ -1,0 +1,48 @@
+=== Session: 2026-01-31 (Session 126) ===
+Status: 275/276 features passing (99.6%)
+
+SERVERS:
+- Backend restarted on port 3002 (was down between sessions)
+- Frontend running on port 3000
+
+REGRESSION TESTING:
+- Registration: PASSED - Created "DJ Regression126" (regression126@test.com) successfully
+- Dashboard: PASSED - Shows "Welcome, DJ Regression126", event count updated to 1
+- Event Creation: PASSED - "Regression Test Dance 126" created with correct details
+
+- Feature #96 (Song request submission with confirmation): PASSED
+  - Searched "Bohemian Rhapsody" via iTunes API -> 20 results returned
+  - Clicked Request on Bohemian Rhapsody (Queen)
+  - Confirmation toast appeared: '"Bohemian Rhapsody" has been requested!'
+  - Search field cleared after submission
+  - Also submitted Billie Jean (Michael Jackson) -> confirmation toast appeared
+
+- Feature #120 (DJ reject request with removal): PASSED
+  - DJ manage page showed 2 requests: Bohemian Rhapsody + Billie Jean
+  - Clicked "Remove" on Billie Jean
+  - Queue updated: "Queue: 5:55 (1 songs)" - Bohemian Rhapsody only in Up Next
+  - Filter buttons: Queued (1), Rejected (1)
+  - Billie Jean status changed to "rejected" in Processed section
+
+- Feature #54 (DJ password reset via email): PASSED
+  - Logged out -> navigated to login page
+  - Clicked "Forgot password?" -> /forgot-password page loaded
+  - Entered "regression126@test.com", clicked "Send Reset Link"
+  - Success message: "Check your email" + "If an account with that email exists, a password reset link has been sent."
+  - "Back to Login" link available
+
+CONSOLE ERRORS: Zero JavaScript errors detected across all pages.
+
+REMAINING FEATURES (1): Blocked by external infrastructure
+- Feature #261: Custom domain with SSL (needs domain purchase + DNS config)
+
+SUMMARY:
+- 275/276 features passing (99.6%) - no regressions
+- All 3 regression features verified end-to-end
+- Application stable, zero console errors
+- Full workflow verified: register -> create event -> request songs -> reject request -> password reset
+
+NEXT SESSION:
+- 275/276 features passing (99.6%)
+- Feature #261 requires external infrastructure (domain purchase, DNS config, Firebase Console)
+- Continue regression testing to maintain quality
