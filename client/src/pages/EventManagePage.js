@@ -2354,8 +2354,8 @@ export default function EventManagePage() {
             const totalPlayMin = Math.floor(totalPlayMs / 60000);
             const totalPlaySec = Math.floor((totalPlayMs % 60000) / 1000);
 
-            // Top 5 most voted songs
-            const topSongs = [...requests].sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0)).slice(0, 5);
+            // Top 10 most voted songs
+            const topSongs = [...requests].sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0)).slice(0, 10);
 
             // Artist frequency
             const artistCounts = {};
@@ -2363,7 +2363,7 @@ export default function EventManagePage() {
               const artist = r.song?.artist || r.artist || r.artistName || 'Unknown';
               artistCounts[artist] = (artistCounts[artist] || 0) + 1;
             });
-            const topArtists = Object.entries(artistCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const topArtists = Object.entries(artistCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
 
             // Status distribution for bar chart
             const statusData = [
@@ -2927,7 +2927,7 @@ export default function EventManagePage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Top Voted Songs */}
                   <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6" data-analytics-top-songs>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-wide">🏆 Top Voted Songs</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-wide">🏆 Top 10 Most Voted Songs</h4>
                     {topSongs.length === 0 ? (
                       <p className="text-sm text-slate-400 dark:text-slate-500">No songs yet</p>
                     ) : (
@@ -2956,7 +2956,7 @@ export default function EventManagePage() {
 
                   {/* Top Artists */}
                   <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6" data-analytics-top-artists>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-wide">🎤 Most Requested Artists</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-wide">🎤 Top 10 Most Requested Artists</h4>
                     {topArtists.length === 0 ? (
                       <p className="text-sm text-slate-400 dark:text-slate-500">No requests yet</p>
                     ) : (
@@ -3096,6 +3096,29 @@ export default function EventManagePage() {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Attendee Engagement */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6" data-analytics-engagement>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4 uppercase tracking-wide">📈 Attendee Engagement</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-3 bg-gradient-to-br from-primary-50 to-violet-50 dark:from-primary-900/20 dark:to-violet-900/20 rounded-lg border border-primary-100 dark:border-primary-800">
+                      <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">{uniqueRequesters > 0 ? (totalRequests / uniqueRequesters).toFixed(1) : '0'}</p>
+                      <p className="text-xs text-primary-500 dark:text-primary-400 font-medium mt-1">Avg requests per attendee</p>
+                    </div>
+                    <div className="text-center p-3 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                      <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{uniqueRequesters > 0 ? (totalVotes / uniqueRequesters).toFixed(1) : '0'}</p>
+                      <p className="text-xs text-blue-500 dark:text-blue-400 font-medium mt-1">Avg votes per attendee</p>
+                    </div>
+                    <div className="text-center p-3 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-lg border border-amber-100 dark:border-amber-800">
+                      <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{totalRequests > 0 ? Math.round((approvedCount / totalRequests) * 100) : 0}%</p>
+                      <p className="text-xs text-amber-500 dark:text-amber-400 font-medium mt-1">Approval rate</p>
+                    </div>
+                    <div className="text-center p-3 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800">
+                      <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{totalRequests > 0 ? (totalVotes / totalRequests).toFixed(1) : '0'}</p>
+                      <p className="text-xs text-emerald-500 dark:text-emerald-400 font-medium mt-1">Avg votes per song</p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Additional Stats */}
