@@ -1,0 +1,53 @@
+# =============================================================================
+# VoteBeats API - Cloud Run Service Configuration
+# =============================================================================
+# Deploy with: gcloud run services replace cloudrun-service.yaml
+# Or use: gcloud run deploy votebeats-api --image <IMAGE_URL> --allow-unauthenticated
+# =============================================================================
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: votebeats-api
+spec:
+  template:
+    metadata:
+      annotations:
+        # Auto-scale: min 0 (scale to zero), max 10 instances
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+        # Mount persistent volume for SQLite database
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+        - image: IMAGE_URL
+          ports:
+            - containerPort: 8080
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "8080"
+            - name: CORS_ORIGIN
+              value: "https://your-firebase-app.web.app"
+            # Use Secret Manager for sensitive values
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: votebeats-jwt-secret
+                  key: latest
+          resources:
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+          # Persistent volume for SQLite database
+          volumeMounts:
+            - name: sqlite-data
+              mountPath: /app/data
+      volumes:
+        - name: sqlite-data
+          csi:
+            driver: gcsfuse.run.googleapis.com
+            volumeAttributes:
+              bucketName: your-votebeats-data-bucket

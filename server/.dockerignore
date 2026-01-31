@@ -1,0 +1,40 @@
+# Dependencies (installed in Docker build)
+node_modules/
+
+# Environment files (secrets - set via Cloud Run env vars)
+.env
+.env.local
+.env.example
+
+# Database files (use persistent volume in production)
+*.db
+*.db-wal
+*.db-shm
+
+# Test and utility scripts
+test_*.js
+check_*.js
+fix_*.js
+add_*.js
+impl_*.js
+patch_*.js
+reset_*.js
+set_*.js
+setup_*.js
+submit_*.js
+update_*.js
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
