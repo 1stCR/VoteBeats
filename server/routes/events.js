@@ -138,8 +138,10 @@ router.delete('/:id', (req, res) => {
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    // Delete associated data
+    // Delete associated data (order matters for foreign key constraints)
+    db.prepare('DELETE FROM message_reads WHERE message_id IN (SELECT id FROM messages WHERE event_id = ?)').run(req.params.id);
     db.prepare('DELETE FROM messages WHERE event_id = ?').run(req.params.id);
+    db.prepare('DELETE FROM feedback WHERE event_id = ?').run(req.params.id);
     db.prepare('DELETE FROM votes WHERE request_id IN (SELECT id FROM requests WHERE event_id = ?)').run(req.params.id);
     db.prepare('DELETE FROM requests WHERE event_id = ?').run(req.params.id);
     db.prepare('DELETE FROM events WHERE id = ?').run(req.params.id);
