@@ -4,11 +4,13 @@ import { Music, LogOut, Plus, Calendar, Users, BarChart3, Settings, Sun, Moon, A
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { api } from '../config/api';
+import { useToast } from '../components/Toast';
 import OnboardingWalkthrough, { hasCompletedOnboarding } from '../components/OnboardingWalkthrough';
 
 export default function DashboardPage() {
   const { currentUser, logout } = useAuth();
   const { darkMode, toggleTheme } = useTheme();
+  const toast = useToast();
   const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -89,7 +91,9 @@ export default function DashboardPage() {
       setShowDJFeedbackForm(false);
       setTimeout(() => setDjFeedbackSuccess(''), 5000);
     } catch (err) {
-      alert(err.message || 'Failed to submit feedback');
+      toast.showError(err.isNetworkError
+        ? 'Unable to connect. Please check your internet connection and try again.'
+        : (err.message || 'Failed to submit feedback. Please try again.'));
     } finally {
       setDjFeedbackSubmitting(false);
     }

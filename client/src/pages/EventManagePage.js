@@ -4,6 +4,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Music, Trash2, X, AlertTriangle, Calendar, MapPin, Clock, Check, XCircle, CheckSquare, Square, ListMusic, Settings, BarChart3, Inbox, MessageSquare, ClipboardList, ChevronDown, Menu, Sun, Moon, Download, Copy, ExternalLink, Play, StopCircle, Radio, Users, StickyNote, Save, ArrowUpDown, Search, Keyboard, GripVertical, WifiOff } from 'lucide-react';
 import { api } from '../config/api';
 import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../components/Toast';
 import EventSettingsForm from '../components/EventSettingsForm';
 import { QRCodeCanvas } from 'qrcode.react';
 
@@ -11,6 +12,7 @@ export default function EventManagePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { darkMode, toggleTheme } = useTheme();
+  const toast = useToast();
   const location = useLocation();
   const [event, setEvent] = useState(null);
   const [requests, setRequests] = useState([]);
@@ -108,7 +110,7 @@ export default function EventManagePage() {
   const exportQueueToSpotify = () => {
     const queueSongs = requests.filter(r => ['queued', 'nowPlaying', 'played'].includes(r.status));
     if (queueSongs.length === 0) {
-      alert('No songs in queue to export.');
+      toast.showWarning('No songs in queue to export. Add some songs first!');
       return;
     }
     const eventName = event?.name || 'Event';
@@ -379,7 +381,9 @@ export default function EventManagePage() {
       setMessageTargetAudience('all');
       fetchDJMessages();
     } catch (err) {
-      alert(err.message || 'Failed to send message');
+      toast.showError(err.isNetworkError
+        ? 'Unable to send message. Please check your connection and try again.'
+        : (err.message || 'Failed to send message. Please try again.'));
     }
     setSendingMessage(false);
   }
@@ -1119,7 +1123,7 @@ export default function EventManagePage() {
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(window.location.origin + '/e/' + id);
-                          alert('URL copied to clipboard!');
+                          toast.showSuccess('URL copied to clipboard!');
                         }}
                         className="p-2 text-slate-500 hover:text-primary-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors flex-shrink-0"
                         title="Copy URL"
@@ -2782,7 +2786,7 @@ export default function EventManagePage() {
             const exportPlayedToSpotify = () => {
               const played = requests.filter(r => r.status === 'played');
               if (played.length === 0) {
-                alert('No played songs to export.');
+                toast.showWarning('No played songs to export yet.');
                 return;
               }
               const eventName = event?.name || 'Event';

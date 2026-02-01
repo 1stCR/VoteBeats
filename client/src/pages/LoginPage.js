@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Music, Mail, Lock, LogIn, Shield } from 'lucide-react';
+import { Music, Mail, Lock, LogIn, Shield, WifiOff, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../components/Toast';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -13,6 +14,7 @@ export default function LoginPage() {
   const [tempToken, setTempToken] = useState(null);
 
   const { login, validate2FA, currentUser } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -50,7 +52,12 @@ export default function LoginPage() {
         }
       }
     } catch (err) {
-      setError(err.message || 'Failed to sign in. Please check your credentials.');
+      if (err.isNetworkError) {
+        setError('Unable to connect to the server. Please check your internet connection and try again.');
+        toast.showNetworkError('Connection failed', () => handleSubmit(e));
+      } else {
+        setError(err.message || 'Failed to sign in. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }

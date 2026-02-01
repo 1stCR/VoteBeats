@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Music, Mail, Lock, User, UserPlus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../components/Toast';
 
 export default function RegisterPage() {
   const [displayName, setDisplayName] = useState('');
@@ -12,6 +13,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
 
   const { register } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
 
   function validatePassword(pwd) {
@@ -41,7 +43,12 @@ export default function RegisterPage() {
       await register(email, password, displayName);
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      setError(err.message || 'Failed to create account. Please try again.');
+      if (err.isNetworkError) {
+        setError('Unable to connect to the server. Please check your internet connection and try again.');
+        toast.showNetworkError('Connection failed. Please try again.');
+      } else {
+        setError(err.message || 'Failed to create account. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
