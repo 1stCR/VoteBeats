@@ -1,5 +1,25 @@
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3002';
 
+const REQUEST_TIMEOUT = 30000; // 30 second timeout
+
+function getUserFriendlyMessage(status, serverMessage) {
+  if (serverMessage && !serverMessage.includes('status') && serverMessage.length < 200) {
+    return serverMessage;
+  }
+  switch (status) {
+    case 400: return 'Invalid request. Please check your input and try again.';
+    case 401: return 'Your session has expired. Please log in again.';
+    case 403: return 'You don\'t have permission to perform this action.';
+    case 404: return 'The requested resource was not found.';
+    case 409: return 'This action conflicts with the current state. Please refresh and try again.';
+    case 429: return 'Too many requests. Please wait a moment and try again.';
+    case 500: return 'Something went wrong on our end. Please try again later.';
+    case 502:
+    case 503: return 'The server is temporarily unavailable. Please try again in a few moments.';
+    default: return 'An unexpected error occurred. Please try again.';
+  }
+}
+
 async function apiRequest(path, options = {}) {
   const token = localStorage.getItem('votebeats_token');
 
@@ -12,17 +32,39 @@ async function apiRequest(path, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      const error = new Error('The request timed out. Please check your connection and try again.');
+      error.isNetworkError = true;
+      error.isTimeout = true;
+      throw error;
+    }
+    const error = new Error('Unable to connect to the server. Please check your internet connection and try again.');
+    error.isNetworkError = true;
+    throw error;
+  }
+
+  clearTimeout(timeoutId);
 
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const error = new Error(data?.error || `Request failed with status ${response.status}`);
+    const serverMsg = data?.error;
+    const error = new Error(getUserFriendlyMessage(response.status, serverMsg));
     error.status = response.status;
     error.data = data;
+    error.serverMessage = serverMsg;
     throw error;
   }
 

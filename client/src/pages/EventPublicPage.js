@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Music, Search, Send, ThumbsUp, ListMusic, User, Link2, Flame, Clock, AlertTriangle, Bell, BellOff, Star, MessageSquare, X, CheckCircle } from 'lucide-react';
+import { Music, Search, Send, ThumbsUp, ListMusic, User, Link2, Flame, Clock, AlertTriangle, Bell, BellOff, Star, MessageSquare, X, CheckCircle, RefreshCw, WifiOff } from 'lucide-react';
 import { api } from '../config/api';
+import { useToast } from '../components/Toast';
 
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -22,6 +23,7 @@ function getAttendeeId() {
 
 export default function EventPublicPage() {
   const { eventId } = useParams();
+  const toast = useToast();
   const [event, setEvent] = useState(null);
   const [djAnnouncements, setDjAnnouncements] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -153,8 +155,15 @@ export default function EventPublicPage() {
     try {
       const data = await api.getPublicEvent(eventId);
       setEvent(data);
+      setError(''); // Clear any previous errors on success
     } catch (err) {
-      setError('Event not found');
+      if (err.isNetworkError) {
+        setError('connection');
+      } else if (err.status === 404) {
+        setError('Event not found. Please check the link and try again.');
+      } else {
+        setError('Something went wrong loading this event. Please try again.');
+      }
     }
   }, [eventId]);
 
@@ -276,11 +285,11 @@ export default function EventPublicPage() {
   function handleManualSubmit() {
     if (!manualTitle.trim() || !manualArtist.trim()) return;
     if (votingOpenCountdown?.notYetOpen) {
-      alert('Voting has not opened yet. Please wait for the voting window to open!');
+      toast.showWarning('Voting has not opened yet. Please wait for the voting window to open!');
       return;
     }
     if (votingCountdown?.closed) {
-      alert('Voting has closed. The final playlist is set!');
+      toast.showWarning('Voting has closed. The final playlist is set!');
       return;
     }
     handleSubmitRequest({
@@ -320,7 +329,7 @@ export default function EventPublicPage() {
       setFeedbackMessage('');
       setFeedbackEmail('');
     } catch (err) {
-      alert(err.message || 'Failed to submit feedback. Please try again.');
+      toast.showError(err.message || 'Failed to submit feedback. Please try again.');
     } finally {
       setFeedbackSubmitting(false);
     }
@@ -328,11 +337,11 @@ export default function EventPublicPage() {
 
   async function handleSubmitRequest(song, skipSimilarCheck = false) {
     if (votingOpenCountdown?.notYetOpen) {
-      alert('Voting has not opened yet. Please wait for the voting window to open!');
+      toast.showWarning('Voting has not opened yet. Please wait for the voting window to open!');
       return;
     }
     if (votingCountdown?.closed) {
-      alert('Voting has closed. The final playlist is set!');
+      toast.showWarning('Voting has closed. The final playlist is set!');
       return;
     }
 
@@ -373,7 +382,11 @@ export default function EventPublicPage() {
       setTimeout(() => setSubmitSuccess(''), 3000);
       fetchRequests();
     } catch (err) {
-      alert(err.message || 'Failed to submit request');
+      if (err.isNetworkError) {
+        toast.showNetworkError(err.message, () => handleSubmitRequest(song, skipSimilarCheck));
+      } else {
+        toast.showError(err.message || 'Failed to submit your song request. Please try again.');
+      }
     }
   }
 
@@ -429,7 +442,7 @@ export default function EventPublicPage() {
       return;
     }
     if (!('Notification' in window)) {
-      alert('Your browser does not support notifications.');
+      toast.showInfo('Your browser does not support notifications.');
       return;
     }
     try {
@@ -444,10 +457,10 @@ export default function EventPublicPage() {
           tag: 'votebeats-test'
         });
       } else {
-        alert('Notification permission was denied. Please enable notifications in your browser settings.');
+        toast.showWarning('Notification permission was denied. Please enable notifications in your browser settings.');
       }
     } catch (e) {
-      alert('Failed to enable notifications: ' + (e.message || 'Unknown error'));
+      toast.showError('Failed to enable notifications. Please check your browser settings.');
     }
   }
 
@@ -528,15 +541,15 @@ export default function EventPublicPage() {
   }
 
   if (error || !event) {
-    const isNetworkError = error && (error.includes('fetch') || error.includes('network') || error.includes('Network') || error.includes('connect'));
+    const isNetworkError = error === 'connection';
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-6" data-error-state>
         <div className="text-center max-w-sm">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full mb-4">
+          <div className={`inline-flex items-center justify-center w-16 h-16 ${isNetworkError ? 'bg-red-100 dark:bg-red-900/30' : 'bg-slate-100 dark:bg-slate-700'} rounded-full mb-4`}>
             {isNetworkError ? (
-              <AlertTriangle className="w-8 h-8 text-amber-400" />
+              <WifiOff className="w-8 h-8 text-red-400" />
             ) : (
-              <Music className="w-8 h-8 text-slate-400" />
+              <AlertTriangle className="w-8 h-8 text-slate-400" />
             )}
           </div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
@@ -544,13 +557,15 @@ export default function EventPublicPage() {
           </h2>
           <p className="text-slate-500 dark:text-slate-400 mb-6">
             {isNetworkError
-              ? 'Unable to reach the server. Check your internet connection and try again.'
-              : "This event doesn't exist or is no longer available."}
+              ? 'Unable to reach the server. Please check your internet connection and try again.'
+              : error || "This event doesn't exist or is no longer available."}
           </p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => { setError(''); setLoading(true); fetchEvent().then(() => { fetchRequests(); setLoading(false); }).catch(() => setLoading(false)); }}
             className="inline-flex items-center gap-2 px-6 py-3 bg-primary-500 text-white font-semibold rounded-xl hover:bg-primary-600 transition-colors"
+            data-retry-button
           >
+            <RefreshCw className="w-5 h-5" />
             Try Again
           </button>
         </div>

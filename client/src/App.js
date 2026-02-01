@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ToastProvider } from './components/Toast';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -35,6 +36,7 @@ export default function App() {
   return (
     <ErrorBoundary>
     <ThemeProvider>
+    <ToastProvider>
     <AuthProvider>
       <a
         href="#main-content"
@@ -86,6 +88,7 @@ export default function App() {
       </Routes>
       </Suspense>
     </AuthProvider>
+    </ToastProvider>
     </ThemeProvider>
     </ErrorBoundary>
   );
