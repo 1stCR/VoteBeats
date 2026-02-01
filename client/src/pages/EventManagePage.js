@@ -1363,7 +1363,25 @@ export default function EventManagePage() {
                 )}
 
                 {requests.length === 0 ? (
-                  <p className="text-slate-500 dark:text-slate-400 text-center py-8">No song requests yet. Share the event link with your audience!</p>
+                  <div className="text-center py-12">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full mb-4">
+                      <Music className="w-8 h-8 text-slate-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">No requests yet</h3>
+                    <p className="text-slate-500 dark:text-slate-400 mb-4 max-w-sm mx-auto">
+                      Share the event link with your audience to start receiving song requests!
+                    </p>
+                    <button
+                      onClick={() => {
+                        const url = `${window.location.origin}/e/${id}`;
+                        navigator.clipboard.writeText(url);
+                      }}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors text-sm font-medium"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Copy Event Link
+                    </button>
+                  </div>
                 ) : (
                   <div className="space-y-6">
                     {/* Pending requests with checkboxes */}
@@ -2028,7 +2046,15 @@ export default function EventManagePage() {
                 )}
               </div>
               {djMessages.length === 0 ? (
-                <p className="text-slate-500 dark:text-slate-400 text-center py-4">No messages sent yet.</p>
+                <div className="text-center py-8">
+                  <div className="inline-flex items-center justify-center w-14 h-14 bg-slate-100 dark:bg-slate-700 rounded-full mb-3">
+                    <MessageSquare className="w-7 h-7 text-slate-400" />
+                  </div>
+                  <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-1">No messages sent yet</h4>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
+                    Use the form above to send announcements or updates to your attendees in real time.
+                  </p>
+                </div>
               ) : (
                 <div className="space-y-3">
                   {djMessages.map(msg => (
