@@ -4,7 +4,6 @@
   },
   "hosting": {
     "public": "client/build",
-    "site": "votebeats",
     "ignore": [
       "firebase.json",
       "**/.*",

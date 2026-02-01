@@ -3,7 +3,46 @@ build/
 .env
 .env.local
 *.db
+*.db-shm
+*.db-wal
 .agent.lock
 .claude_settings.json
+.claude_assistant_settings.json
 .playwright-mcp/
+.claude/
+.firebase/
 claude-progress.txt
+claude-progress.txt.tmp
+session*-progress.txt
+update-progress*.js
+features.db
+assistant.db
+nul
+
+# Deployment environment files (use templates instead)
+server/.env.prod
+server/env.yaml
+
+# Test and migration scripts
+server/add_*.js
+server/check_*.js
+server/fix_*.js
+server/impl_*.js
+server/patch_*.js
+server/reset_*.js
+server/set_*.js
+server/setup_*.js
+server/submit_*.js
+server/test_*.js
+server/update_*.js
+server/kill_server.js
+server/restart.js
+server/find_event_owner.js
+
+# Desktop helper build artifacts
+desktop-helper/dist/
+desktop-helper/out/
+
+# Output files
+features_output.txt
+firebase-debug.log
