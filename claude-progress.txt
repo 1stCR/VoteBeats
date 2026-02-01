@@ -5489,3 +5489,42 @@ SUMMARY:
 NEXT SESSION:
 - All 276 features passing (100% complete)
 - Continue regression testing to maintain quality
+
+=== Session: 2026-02-01 (Session 177) ===
+Status: 276/276 features passing (100.0%) *** PROJECT COMPLETE ***
+
+SERVERS:
+- Backend restarted on port 3002 (was down between sessions)
+- Frontend running on port 3000
+
+REGRESSION TESTING:
+- Feature #67 (Dark mode and light mode toggle): PASSED
+  - Registered new DJ "DJ RegSession177" (regression_s177@test.com)
+  - Dashboard loaded in light mode, clicked "Switch to dark mode"
+  - Dark mode: dark navy background, light text, good contrast - verified via screenshot
+  - Clicked "Switch to light mode" -> white background, dark text - verified via screenshot
+  - Switched back to dark mode, refreshed page -> preference persisted (button still said "Switch to light mode")
+
+- Feature #123 (DJ drag-and-drop reorder queue): PASSED
+  - Created event "TEST_S177_REORDER_DANCE" at "Regression Venue S177"
+  - Submitted 3 songs as attendee: Bohemian Rhapsody (Queen), Billie Jean (MJ), Shape of You (Ed Sheeran)
+  - Original order: Bohemian Rhapsody, Billie Jean, Shape of You
+  - Dragged Shape of You from position 3 to position 1
+  - New order confirmed: Shape of You, Bohemian Rhapsody, Billie Jean
+  - Processed section also reflected new order
+  - Refreshed page -> reorder persisted in database
+  - Manual order correctly overrides default ordering
+
+CLEANUP:
+- Deleted test event via confirmation dialog, dashboard reset to 0 events
+
+CONSOLE ERRORS: Zero JavaScript errors
+
+SUMMARY:
+- All 276 features remain passing (100% complete)
+- No regressions found
+- Application is stable and working correctly
+
+NEXT SESSION:
+- All 276 features passing (100% complete)
+- Continue regression testing to maintain quality
