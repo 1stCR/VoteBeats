@@ -1,7 +1,35 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 
-const dbPath = path.join(__dirname, 'votebeats.db');
+// Database path priority:
+// 1. DB_PATH env var (if set)
+// 2. Production: ./data/votebeats.db (Docker volume mount)
+// 3. Development: ./votebeats.db (backwards compatible)
+function getDatabasePath() {
+  if (process.env.DB_PATH) {
+    const envPath = process.env.DB_PATH;
+    return path.isAbsolute(envPath) ? envPath : path.join(__dirname, envPath);
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    return path.join(__dirname, 'data', 'votebeats.db');
+  }
+
+  return path.join(__dirname, 'votebeats.db');
+}
+
+const dbPath = getDatabasePath();
+
+// Ensure directory exists
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+  console.log(`Created database directory: ${dbDir}`);
+}
+
+console.log(`SQLite database path: ${dbPath}`);
+
 const db = new Database(dbPath);
 
 // Enable WAL mode for better concurrency
