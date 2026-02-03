@@ -98,12 +98,13 @@ echo ""
 
 # Step 8: Deploy to Cloud Run with GCS FUSE volume mount for SQLite persistence
 echo -e "${YELLOW}[8/9] Deploying to Cloud Run...${NC}"
-gcloud run deploy ${SERVICE_NAME} \
+# Note: MSYS_NO_PATHCONV prevents Git Bash on Windows from converting /app/data to a Windows path
+MSYS_NO_PATHCONV=1 gcloud run deploy ${SERVICE_NAME} \
     --image gcr.io/${PROJECT_ID}/${SERVICE_NAME} \
     --platform managed \
     --region ${REGION} \
     --allow-unauthenticated \
-    --set-env-vars NODE_ENV=production,PORT=8080 \
+    --set-env-vars NODE_ENV=production \
     --update-secrets JWT_SECRET=${SECRET_NAME}:latest \
     --execution-environment gen2 \
     --cpu 1 \
