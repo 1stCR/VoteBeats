@@ -96,7 +96,7 @@ cd ..
 echo -e "${GREEN}✓ Docker image built and pushed${NC}"
 echo ""
 
-# Step 8: Deploy to Cloud Run
+# Step 8: Deploy to Cloud Run with GCS FUSE volume mount for SQLite persistence
 echo -e "${YELLOW}[8/9] Deploying to Cloud Run...${NC}"
 gcloud run deploy ${SERVICE_NAME} \
     --image gcr.io/${PROJECT_ID}/${SERVICE_NAME} \
@@ -109,10 +109,13 @@ gcloud run deploy ${SERVICE_NAME} \
     --cpu 1 \
     --memory 512Mi \
     --min-instances 0 \
-    --max-instances 10 \
+    --max-instances 1 \
     --timeout 300 \
+    --add-volume name=sqlite-data,type=cloud-storage,bucket=${BUCKET_NAME} \
+    --add-volume-mount volume=sqlite-data,mount-path=/app/data \
     --quiet
 echo -e "${GREEN}✓ Deployed to Cloud Run${NC}"
+echo -e "${GREEN}✓ GCS bucket ${BUCKET_NAME} mounted at /app/data${NC}"
 echo ""
 
 # Step 9: Get service URL and update CORS
