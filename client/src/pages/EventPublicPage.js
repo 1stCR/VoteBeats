@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Music, Search, Send, ThumbsUp, ListMusic, User, Link2, Flame, Clock, AlertTriangle, Bell, BellOff, Star, MessageSquare, X, CheckCircle, RefreshCw, WifiOff } from 'lucide-react';
+import { Music, Search, Send, ThumbsUp, ListMusic, User, Link2, Flame, Clock, AlertTriangle, Bell, BellOff, Star, MessageSquare, X, CheckCircle, RefreshCw, WifiOff, BarChart3, Eye } from 'lucide-react';
 import { api } from '../config/api';
 import { useToast } from '../components/Toast';
+import MyRankings from '../components/MyRankings';
+import BrowseQueue from '../components/BrowseQueue';
+import CelebrationModal from '../components/CelebrationModal';
 
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -62,6 +65,13 @@ export default function EventPublicPage() {
   const notifiedMessageIdsRef = useRef(new Set()); // { song, matches }
   const notificationsEnabledRef = useRef(notificationsEnabled);
   useEffect(() => { notificationsEnabledRef.current = notificationsEnabled; }, [notificationsEnabled]);
+
+  // Ranked-choice state
+  const [myRankings, setMyRankings] = useState([]);
+  const [crowdScores, setCrowdScores] = useState(null);
+  const [unseenCount, setUnseenCount] = useState(0);
+  const [celebrationSong, setCelebrationSong] = useState(null);
+  const previousTopPickRef = useRef(null);
 
   // Helper to format time diff
   const formatTimeDiff = (diff) => {
@@ -215,6 +225,50 @@ export default function EventPublicPage() {
     }, 15000); // Poll every 15 seconds for new messages
     return () => clearInterval(msgPollInterval);
   }, [eventId, loading, attendeeId]);
+
+  // Ranked-choice data polling
+  const isRankedChoice = event?.settings?.queueMode === 'ranked-choice';
+
+  const fetchRankingData = useCallback(async () => {
+    if (!isRankedChoice) return;
+    try {
+      const [rankingsData, scoresData, unseenData] = await Promise.all([
+        api.getRankings(eventId, attendeeId),
+        api.getRankingScores(eventId, attendeeId),
+        api.getUnseenCount(eventId, attendeeId),
+      ]);
+      setMyRankings(rankingsData.rankings || []);
+      setCrowdScores(scoresData);
+      setUnseenCount(unseenData.unseenCount || 0);
+
+      // Check for celebration: user's #1 pick is now playing
+      if (rankingsData.rankings && rankingsData.rankings.length > 0) {
+        const topPick = rankingsData.rankings[0];
+        const nowPlayingRequest = requests.find(r => r.status === 'nowPlaying');
+        if (nowPlayingRequest && nowPlayingRequest.id === topPick.requestId) {
+          if (previousTopPickRef.current !== topPick.requestId) {
+            const score = scoresData?.scores?.find(s => s.requestId === topPick.requestId);
+            setCelebrationSong({
+              title: topPick.song?.title,
+              artist: topPick.song?.artist,
+              albumArtUrl: topPick.song?.albumArtUrl,
+              rankerCount: score?.rankerCount || 0
+            });
+          }
+        }
+        previousTopPickRef.current = topPick.requestId;
+      }
+    } catch (err) {
+      // Silently fail - ranked data is supplementary
+    }
+  }, [eventId, attendeeId, isRankedChoice, requests]);
+
+  useEffect(() => {
+    if (!isRankedChoice || !eventId || loading) return;
+    fetchRankingData();
+    const interval = setInterval(fetchRankingData, 3000);
+    return () => clearInterval(interval);
+  }, [isRankedChoice, eventId, loading, fetchRankingData]);
 
   // Resolve code word to linked attendee ID
   useEffect(() => {
@@ -573,7 +627,12 @@ export default function EventPublicPage() {
     );
   }
 
-  const tabs = [
+  const tabs = isRankedChoice ? [
+    { key: 'rankings', label: 'My Rankings', icon: BarChart3 },
+    { key: 'queue', label: 'Now Playing', icon: ListMusic },
+    { key: 'browse', label: unseenCount > 0 ? `Browse (${unseenCount})` : 'Browse', icon: Eye },
+    { key: 'request', label: 'Request', icon: Music },
+  ] : [
     { key: 'request', label: 'Request Song', icon: Music },
     { key: 'queue', label: 'Queue', icon: ListMusic },
     { key: 'my-requests', label: 'My Requests', icon: User },
@@ -1260,7 +1319,43 @@ export default function EventPublicPage() {
               )}
             </div>
           )}
+
+          {/* Ranked-Choice: My Rankings Tab */}
+          {activeTab === 'rankings' && isRankedChoice && (
+            <MyRankings
+              eventId={eventId}
+              attendeeId={attendeeId}
+              rankings={myRankings}
+              crowdScores={crowdScores}
+              rankingDepth={event?.settings?.rankedChoiceSettings?.rankingDepth || 10}
+              onRankingsChanged={fetchRankingData}
+              onSwitchTab={setActiveTab}
+            />
+          )}
+
+          {/* Ranked-Choice: Browse Queue Tab */}
+          {activeTab === 'browse' && isRankedChoice && (
+            <BrowseQueue
+              eventId={eventId}
+              attendeeId={attendeeId}
+              requests={requests}
+              rankings={myRankings}
+              crowdScores={crowdScores}
+              rankingDepth={event?.settings?.rankedChoiceSettings?.rankingDepth || 10}
+              onRankingsChanged={fetchRankingData}
+              onSeenUpdated={() => api.getUnseenCount(eventId, attendeeId).then(d => setUnseenCount(d.unseenCount || 0)).catch(() => {})}
+            />
+          )}
         </div>
+
+        {/* Celebration Modal */}
+        {celebrationSong && (
+          <CelebrationModal
+            song={celebrationSong}
+            rankerCount={celebrationSong.rankerCount}
+            onDismiss={() => setCelebrationSong(null)}
+          />
+        )}
 
         {/* Similar Song Warning Dialog */}
         {similarSongDialog && (

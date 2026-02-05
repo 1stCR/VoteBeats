@@ -5,6 +5,7 @@ const { authenticateToken } = require('../middleware/auth');
 const { sanitizeString } = require('../utils/sanitize');
 const { containsProfanity, filterProfanity } = require('../utils/profanity');
 const { findFuzzyMatches } = require('../utils/fuzzyMatch');
+const { calculateScores, scoresAreStale, removeSongFromAllRankings } = require('../utils/copeland');
 
 const router = express.Router();
 
@@ -520,8 +521,44 @@ router.get('/events/:eventId/requests', (req, res) => {
       }
     }
 
-    // Sort: manually ordered songs first (by manual_order), then auto-sort by vote count (highest first)
-    const requests = db.prepare('SELECT * FROM requests WHERE event_id = ? ORDER BY CASE WHEN manual_order IS NOT NULL THEN 0 ELSE 1 END, manual_order ASC, vote_count DESC, created_at ASC').all(eventId);
+    // Determine queue mode for sort order
+    const eventForSettings = db.prepare('SELECT settings FROM events WHERE id = ?').get(eventId);
+    const eventSettings = eventForSettings ? parseSettings(eventForSettings.settings) : {};
+    const isRankedChoice = eventSettings.queueMode === 'ranked-choice';
+
+    let requests;
+    if (isRankedChoice) {
+      // Ranked-choice mode: sort by manual_order first, then by Copeland score from ranking_scores
+      const primaryMode = (eventSettings.rankedChoiceSettings && eventSettings.rankedChoiceSettings.primaryScoringMode) || 'consensus';
+      const refreshInterval = (eventSettings.rankedChoiceSettings && eventSettings.rankedChoiceSettings.refreshIntervalSeconds) || 30;
+
+      // Lazy recalculation if scores are stale
+      if (scoresAreStale(eventId, db, refreshInterval)) {
+        const minRankDelta = (eventSettings.rankedChoiceSettings && eventSettings.rankedChoiceSettings.hiddenGemThreshold && eventSettings.rankedChoiceSettings.hiddenGemThreshold.minRankDelta) || 5;
+        const maxRankerPct = (eventSettings.rankedChoiceSettings && eventSettings.rankedChoiceSettings.hiddenGemThreshold && eventSettings.rankedChoiceSettings.hiddenGemThreshold.maxRankerPercentage) || 20;
+        calculateScores(eventId, db, { minRankDelta, maxRankerPercentage: maxRankerPct });
+      }
+
+      const copelandCol = primaryMode === 'discovery' ? 'rs.discovery_copeland' : 'rs.consensus_copeland';
+      const rankCol = primaryMode === 'discovery' ? 'rs.discovery_rank' : 'rs.consensus_rank';
+
+      requests = db.prepare(
+        `SELECT r.*, ${copelandCol} as primary_copeland, ${rankCol} as primary_rank, rs.ranker_count as rs_ranker_count, rs.avg_position as rs_avg_position
+         FROM requests r
+         LEFT JOIN ranking_scores rs ON rs.request_id = r.id AND rs.event_id = r.event_id
+         WHERE r.event_id = ?
+         ORDER BY
+           CASE WHEN r.manual_order IS NOT NULL THEN 0 ELSE 1 END,
+           r.manual_order ASC,
+           COALESCE(${copelandCol}, -999999) DESC,
+           COALESCE(rs.ranker_count, 0) DESC,
+           COALESCE(rs.avg_position, 999) ASC,
+           r.created_at ASC`
+      ).all(eventId);
+    } else {
+      // Simple voting mode: sort by manual_order, then vote count, then creation time
+      requests = db.prepare('SELECT * FROM requests WHERE event_id = ? ORDER BY CASE WHEN manual_order IS NOT NULL THEN 0 ELSE 1 END, manual_order ASC, vote_count DESC, created_at ASC').all(eventId);
+    }
 
     // Calculate recent votes (last hour) for trending indicators
     const recentVotesStmt = db.prepare(
@@ -667,6 +704,29 @@ router.put('/events/:eventId/requests/:requestId/status', authenticateToken, (re
       return res.status(403).json({ error: 'Not authorized' });
     }
 
+    // If transitioning to nowPlaying or played, snapshot final scores and remove from rankings
+    if (['nowPlaying', 'played'].includes(status)) {
+      // Snapshot final ranking scores for historical preservation
+      const finalScoreRow = db.prepare('SELECT * FROM ranking_scores WHERE event_id = ? AND request_id = ?')
+        .get(req.params.eventId, req.params.requestId);
+      if (finalScoreRow) {
+        const finalScoresJson = JSON.stringify({
+          consensusRank: finalScoreRow.consensus_rank,
+          consensusWinRate: finalScoreRow.consensus_win_rate,
+          consensusCopeland: finalScoreRow.consensus_copeland,
+          discoveryRank: finalScoreRow.discovery_rank,
+          discoveryWinRate: finalScoreRow.discovery_win_rate,
+          discoveryCopeland: finalScoreRow.discovery_copeland,
+          rankerCount: finalScoreRow.ranker_count,
+          avgPosition: finalScoreRow.avg_position
+        });
+        db.prepare('UPDATE requests SET final_scores = ? WHERE id = ?').run(finalScoresJson, req.params.requestId);
+      }
+
+      // Remove song from all participant rankings and scores cache
+      removeSongFromAllRankings(req.params.eventId, req.params.requestId, db);
+    }
+
     db.prepare('UPDATE requests SET status = ?, updated_at = datetime(\'now\') WHERE id = ?')
       .run(status, req.params.requestId);
 
@@ -793,6 +853,10 @@ router.delete('/events/:eventId/requests/:requestId', authenticateToken, (req, r
       return res.status(403).json({ error: 'Not authorized' });
     }
 
+    // Remove from all rankings and scores before deleting
+    removeSongFromAllRankings(req.params.eventId, req.params.requestId, db);
+
+    db.prepare('DELETE FROM seen_songs WHERE event_id = ? AND request_id = ?').run(req.params.eventId, req.params.requestId);
     db.prepare('DELETE FROM votes WHERE request_id = ?').run(req.params.requestId);
     db.prepare('DELETE FROM requests WHERE id = ?').run(req.params.requestId);
 
@@ -917,6 +981,7 @@ function formatRequest(req) {
     manualOrder: req.manual_order,
     djNotes: req.dj_notes,
     preppedInSpotify: !!req.prepped_in_spotify,
+    finalScores: req.final_scores ? JSON.parse(req.final_scores) : null,
     createdAt: req.created_at,
     updatedAt: req.updated_at
   };

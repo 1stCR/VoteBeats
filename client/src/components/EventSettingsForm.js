@@ -27,6 +27,11 @@ export default function EventSettingsForm({ event, eventId, onSaved }) {
     requestCloseTime: '',
     cooldownMinutes: 0,
     lowQueueThreshold: 3,
+    queueMode: 'simple-voting',
+    rankingDepth: 10,
+    primaryScoringMode: 'consensus',
+    hiddenGemMinRankDelta: 5,
+    hiddenGemMaxRankerPercentage: 20,
   });
   const [templates, setTemplates] = useState([]);
   const [templateName, setTemplateName] = useState('');
@@ -66,6 +71,11 @@ export default function EventSettingsForm({ event, eventId, onSaved }) {
         requestCloseTime: settings.requestCloseTime || '',
         cooldownMinutes: settings.cooldownMinutes || 0,
         lowQueueThreshold: settings.lowQueueThreshold !== undefined ? settings.lowQueueThreshold : 3,
+        queueMode: settings.queueMode || 'simple-voting',
+        rankingDepth: (settings.rankedChoiceSettings && settings.rankedChoiceSettings.rankingDepth) || 10,
+        primaryScoringMode: (settings.rankedChoiceSettings && settings.rankedChoiceSettings.primaryScoringMode) || 'consensus',
+        hiddenGemMinRankDelta: (settings.rankedChoiceSettings && settings.rankedChoiceSettings.hiddenGemThreshold && settings.rankedChoiceSettings.hiddenGemThreshold.minRankDelta) || 5,
+        hiddenGemMaxRankerPercentage: (settings.rankedChoiceSettings && settings.rankedChoiceSettings.hiddenGemThreshold && settings.rankedChoiceSettings.hiddenGemThreshold.maxRankerPercentage) || 20,
       });
     }
   }, [event]);
@@ -73,8 +83,8 @@ export default function EventSettingsForm({ event, eventId, onSaved }) {
   async function saveTemplate() {
     if (!templateName.trim()) return;
     try {
-      const { blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit, postCloseRequestLimit, votingSchedule, votingOpenTime, votingCloseMode, votingCloseTime, votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime, cooldownMinutes, lowQueueThreshold } = formData;
-      const settings = { blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit, postCloseRequestLimit, votingSchedule, votingOpenTime, votingCloseMode, votingCloseTime, votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime, cooldownMinutes, lowQueueThreshold };
+      const { blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit, postCloseRequestLimit, votingSchedule, votingOpenTime, votingCloseMode, votingCloseTime, votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime, cooldownMinutes, lowQueueThreshold, queueMode, rankingDepth, primaryScoringMode, hiddenGemMinRankDelta, hiddenGemMaxRankerPercentage } = formData;
+      const settings = { blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit, postCloseRequestLimit, votingSchedule, votingOpenTime, votingCloseMode, votingCloseTime, votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime, cooldownMinutes, lowQueueThreshold, queueMode, rankedChoiceSettings: queueMode === 'ranked-choice' ? { rankingDepth, primaryScoringMode, hiddenGemThreshold: { minRankDelta: hiddenGemMinRankDelta, maxRankerPercentage: hiddenGemMaxRankerPercentage }, minParticipantsForActivation: 5, refreshIntervalSeconds: 30, autoRefreshBeforeSongEndSeconds: 45 } : undefined };
       const created = await api.createTemplate(templateName.trim(), settings);
       setTemplates(prev => [created, ...prev]);
       setTemplateName('');
@@ -105,6 +115,11 @@ export default function EventSettingsForm({ event, eventId, onSaved }) {
       requestCloseTime: s.requestCloseTime || '',
       cooldownMinutes: s.cooldownMinutes || 0,
       lowQueueThreshold: s.lowQueueThreshold !== undefined ? s.lowQueueThreshold : 3,
+      queueMode: s.queueMode || 'simple-voting',
+      rankingDepth: (s.rankedChoiceSettings && s.rankedChoiceSettings.rankingDepth) || 10,
+      primaryScoringMode: (s.rankedChoiceSettings && s.rankedChoiceSettings.primaryScoringMode) || 'consensus',
+      hiddenGemMinRankDelta: (s.rankedChoiceSettings && s.rankedChoiceSettings.hiddenGemThreshold && s.rankedChoiceSettings.hiddenGemThreshold.minRankDelta) || 5,
+      hiddenGemMaxRankerPercentage: (s.rankedChoiceSettings && s.rankedChoiceSettings.hiddenGemThreshold && s.rankedChoiceSettings.hiddenGemThreshold.maxRankerPercentage) || 20,
     }));
     setSaved(false);
   }
@@ -124,10 +139,18 @@ export default function EventSettingsForm({ event, eventId, onSaved }) {
     setError('');
     setSaved(false);
     try {
-      const { blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit, postCloseRequestLimit, votingSchedule, votingOpenTime, votingCloseMode, votingCloseTime, votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime, cooldownMinutes, lowQueueThreshold, ...eventFields } = formData;
+      const { blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit, postCloseRequestLimit, votingSchedule, votingOpenTime, votingCloseMode, votingCloseTime, votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime, cooldownMinutes, lowQueueThreshold, queueMode, rankingDepth, primaryScoringMode, hiddenGemMinRankDelta, hiddenGemMaxRankerPercentage, ...eventFields } = formData;
+      const rankedChoiceSettings = queueMode === 'ranked-choice' ? {
+        rankingDepth: parseInt(rankingDepth) || 10,
+        primaryScoringMode,
+        hiddenGemThreshold: { minRankDelta: parseInt(hiddenGemMinRankDelta) || 5, maxRankerPercentage: parseInt(hiddenGemMaxRankerPercentage) || 20 },
+        minParticipantsForActivation: 5,
+        refreshIntervalSeconds: 30,
+        autoRefreshBeforeSongEndSeconds: 45
+      } : undefined;
       const updated = await api.updateEvent(eventId, {
         ...eventFields,
-        settings: { ...(event?.settings || {}), blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit: requestLimit > 0 ? requestLimit : 0, postCloseRequestLimit: postCloseRequestLimit !== '' ? parseInt(postCloseRequestLimit) || 0 : undefined, votingSchedule, votingOpenTime: votingSchedule === 'scheduled' ? votingOpenTime : '', votingCloseMode, votingCloseTime: votingCloseMode === 'scheduled' ? votingCloseTime : '', votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime: requestCloseTime || undefined, cooldownMinutes: cooldownMinutes > 0 ? cooldownMinutes : 0, lowQueueThreshold: lowQueueThreshold > 0 ? lowQueueThreshold : 3 },
+        settings: { ...(event?.settings || {}), blockExplicit, profanityFilter, requireApproval, warnExplicit, requestLimit: requestLimit > 0 ? requestLimit : 0, postCloseRequestLimit: postCloseRequestLimit !== '' ? parseInt(postCloseRequestLimit) || 0 : undefined, votingSchedule, votingOpenTime: votingSchedule === 'scheduled' ? votingOpenTime : '', votingCloseMode, votingCloseTime: votingCloseMode === 'scheduled' ? votingCloseTime : '', votingClosed, queueVisibility, postCloseVisibility, duringEventVisibility, requestCloseTime: requestCloseTime || undefined, cooldownMinutes: cooldownMinutes > 0 ? cooldownMinutes : 0, lowQueueThreshold: lowQueueThreshold > 0 ? lowQueueThreshold : 3, queueMode, rankedChoiceSettings },
       });
       onSaved(updated);
       setSaved(true);
@@ -564,6 +587,104 @@ export default function EventSettingsForm({ event, eventId, onSaved }) {
               className="w-20 px-3 py-1.5 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded-lg text-slate-900 dark:text-white text-center focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
             />
           </div>
+        </div>
+
+        {/* Queue Influence Mode */}
+        <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
+          <label className="block text-sm font-medium text-purple-700 dark:text-purple-300 mb-2">Queue Influence Mode</label>
+          <div className="flex gap-3 mb-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="queueMode"
+                value="simple-voting"
+                checked={formData.queueMode === 'simple-voting'}
+                onChange={(e) => handleChange('queueMode', e.target.value)}
+                className="text-purple-500"
+              />
+              <span className="text-sm text-slate-700 dark:text-slate-300">Simple Voting</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="queueMode"
+                value="ranked-choice"
+                checked={formData.queueMode === 'ranked-choice'}
+                onChange={(e) => handleChange('queueMode', e.target.value)}
+                className="text-purple-500"
+              />
+              <span className="text-sm text-slate-700 dark:text-slate-300">Ranked-Choice</span>
+            </label>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+            {formData.queueMode === 'simple-voting'
+              ? 'Attendees upvote songs. Queue sorts by vote count.'
+              : 'Attendees rank their top songs. Queue uses pairwise comparison algorithm.'}
+          </p>
+
+          {formData.queueMode === 'ranked-choice' && (
+            <div className="mt-3 space-y-3 pl-2 border-l-2 border-purple-300 dark:border-purple-600">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Ranking Depth</label>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Max songs each attendee can rank</p>
+                </div>
+                <select
+                  value={formData.rankingDepth}
+                  onChange={(e) => handleChange('rankingDepth', parseInt(e.target.value))}
+                  className="w-20 px-3 py-1.5 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded-lg text-slate-900 dark:text-white text-center focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-sm"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={20}>20</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Primary Scoring Mode</label>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Determines auto-queue order (both always calculated)</p>
+                </div>
+                <select
+                  value={formData.primaryScoringMode}
+                  onChange={(e) => handleChange('primaryScoringMode', e.target.value)}
+                  className="w-32 px-3 py-1.5 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded-lg text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-sm"
+                >
+                  <option value="consensus">Consensus</option>
+                  <option value="discovery">Discovery</option>
+                </select>
+              </div>
+
+              <details className="text-xs">
+                <summary className="cursor-pointer text-purple-600 dark:text-purple-400 font-medium">Advanced: Hidden Gem Thresholds</summary>
+                <div className="mt-2 space-y-2 ml-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-400">Min rank delta</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={formData.hiddenGemMinRankDelta}
+                      onChange={(e) => handleChange('hiddenGemMinRankDelta', parseInt(e.target.value) || 5)}
+                      className="w-16 px-2 py-1 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded text-center"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-400">Max ranker % of participants</span>
+                    <input
+                      type="number"
+                      min="5"
+                      max="50"
+                      value={formData.hiddenGemMaxRankerPercentage}
+                      onChange={(e) => handleChange('hiddenGemMaxRankerPercentage', parseInt(e.target.value) || 20)}
+                      className="w-16 px-2 py-1 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded text-center"
+                    />
+                  </div>
+                </div>
+              </details>
+            </div>
+          )}
         </div>
 
         <div>

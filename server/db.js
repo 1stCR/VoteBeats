@@ -223,4 +223,59 @@ if (!domainRow) {
   db.prepare('INSERT INTO domain_config (id) VALUES (1)').run();
 }
 
+// Create rankings table for ranked-choice queue mode (participant personal ranked lists)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS rankings (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    participant_id TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    added_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(event_id, participant_id, request_id),
+    FOREIGN KEY (event_id) REFERENCES events(id),
+    FOREIGN KEY (request_id) REFERENCES requests(id)
+  );
+`);
+
+// Create ranking_scores table for cached aggregate pairwise scores (both Consensus and Discovery modes)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ranking_scores (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    consensus_copeland INTEGER DEFAULT 0,
+    consensus_wins INTEGER DEFAULT 0,
+    consensus_losses INTEGER DEFAULT 0,
+    consensus_win_rate REAL DEFAULT 0,
+    consensus_rank INTEGER,
+    discovery_copeland INTEGER DEFAULT 0,
+    discovery_wins INTEGER DEFAULT 0,
+    discovery_losses INTEGER DEFAULT 0,
+    discovery_win_rate REAL DEFAULT 0,
+    discovery_rank INTEGER,
+    ranker_count INTEGER DEFAULT 0,
+    avg_position REAL,
+    is_hidden_gem INTEGER DEFAULT 0,
+    calculated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(event_id, request_id),
+    FOREIGN KEY (event_id) REFERENCES events(id),
+    FOREIGN KEY (request_id) REFERENCES requests(id)
+  );
+`);
+
+// Create seen_songs table for tracking browse queue seen/unseen per participant
+db.exec(`
+  CREATE TABLE IF NOT EXISTS seen_songs (
+    event_id TEXT NOT NULL,
+    participant_id TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    seen_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (event_id, participant_id, request_id)
+  );
+`);
+
+// Migration: add final_scores column for historical preservation when songs are played
+try { db.exec('ALTER TABLE requests ADD COLUMN final_scores TEXT'); } catch(e) { /* column exists */ }
+
 module.exports = db;

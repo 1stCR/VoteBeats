@@ -17,6 +17,7 @@ const desktopRoutes = require('./routes/desktop');
 const feedbackRoutes = require('./routes/feedback');
 const roadmapRoutes = require('./routes/roadmap');
 const domainRoutes = require('./routes/domain');
+const rankingsRoutes = require('./routes/rankings');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -104,6 +105,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/auth/2fa', twofaRoutes);
 app.use('/api', requestRoutes);
+app.use('/api', rankingsRoutes);
 app.use('/api', messageRoutes);
 app.use('/api', feedbackRoutes);
 app.use('/api/events', eventRoutes);

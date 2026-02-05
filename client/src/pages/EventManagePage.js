@@ -6,6 +6,7 @@ import { api } from '../config/api';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../components/Toast';
 import EventSettingsForm from '../components/EventSettingsForm';
+import RankedQueueView from '../components/RankedQueueView';
 import { QRCodeCanvas } from 'qrcode.react';
 
 export default function EventManagePage() {
@@ -1158,6 +1159,16 @@ export default function EventManagePage() {
                   </div>
                 </div>
               </div>
+
+              {/* Ranked-Choice Queue View */}
+              {event?.settings?.queueMode === 'ranked-choice' && (
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-6">
+                  <RankedQueueView
+                    eventId={id}
+                    onRequestAction={loadRequests}
+                  />
+                </div>
+              )}
 
               {/* Song Requests Queue */}
               <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">

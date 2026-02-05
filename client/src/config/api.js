@@ -360,6 +360,57 @@ export const api = {
   getDnsInstructions: () =>
     apiRequest('/api/domain/dns-instructions'),
 
+  // Rankings (Ranked-Choice Queue Mode)
+  getRankings: (eventId, participantId) =>
+    apiRequest(`/api/events/${eventId}/rankings?participantId=${encodeURIComponent(participantId)}`),
+
+  setRankings: (eventId, participantId, rankings) =>
+    apiRequest(`/api/events/${eventId}/rankings`, {
+      method: 'PUT',
+      body: JSON.stringify({ participantId, rankings }),
+    }),
+
+  addToRanking: (eventId, participantId, requestId, position) =>
+    apiRequest(`/api/events/${eventId}/rankings/add`, {
+      method: 'POST',
+      body: JSON.stringify({ participantId, requestId, position }),
+    }),
+
+  removeFromRanking: (eventId, requestId, participantId) =>
+    apiRequest(`/api/events/${eventId}/rankings/${requestId}?participantId=${encodeURIComponent(participantId)}`, {
+      method: 'DELETE',
+    }),
+
+  reorderRankings: (eventId, participantId, orderedRequestIds) =>
+    apiRequest(`/api/events/${eventId}/rankings/reorder`, {
+      method: 'PUT',
+      body: JSON.stringify({ participantId, orderedRequestIds }),
+    }),
+
+  getRankingScores: (eventId, participantId) =>
+    apiRequest(`/api/events/${eventId}/rankings/scores${participantId ? `?participantId=${encodeURIComponent(participantId)}` : ''}`),
+
+  getDualRankingScores: (eventId) =>
+    apiRequest(`/api/events/${eventId}/rankings/scores/dual`),
+
+  refreshRankings: (eventId) =>
+    apiRequest(`/api/events/${eventId}/rankings/refresh`, { method: 'POST' }),
+
+  markSongsSeen: (eventId, participantId, requestIds) =>
+    apiRequest(`/api/events/${eventId}/rankings/seen`, {
+      method: 'POST',
+      body: JSON.stringify({ participantId, requestIds }),
+    }),
+
+  getUnseenCount: (eventId, participantId) =>
+    apiRequest(`/api/events/${eventId}/rankings/unseen-count?participantId=${encodeURIComponent(participantId)}`),
+
+  switchScoringMode: (eventId, primaryScoringMode) =>
+    apiRequest(`/api/events/${eventId}/rankings/switch-mode`, {
+      method: 'POST',
+      body: JSON.stringify({ primaryScoringMode }),
+    }),
+
   // Health
   healthCheck: () =>
     apiRequest('/api/health'),
