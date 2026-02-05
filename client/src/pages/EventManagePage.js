@@ -1616,7 +1616,7 @@ export default function EventManagePage() {
                           Up Next ({queuedRequests.length})
                         </button>
                         {!collapsedSections.upNext && (<div className="space-y-2">
-                          {sortRequests(queuedRequests).map((request, index) => (
+                          {sortRequests(queuedRequests).map((request) => (
                             <div
                               key={request.id}
                               data-drag-item={request.id}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Music, Mail, Lock, LogIn, Shield, WifiOff, RefreshCw } from 'lucide-react';
+import { Music, Mail, Lock, LogIn, Shield } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
 

@@ -10,7 +10,7 @@ import CelebrationModal from '../components/CelebrationModal';
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    const v = c === 'x' ? r : ((r & 0x3) | 0x8);
     return v.toString(16);
   });
 }
@@ -122,6 +122,7 @@ export default function EventPublicPage() {
     }
 
     setVotingOpenCountdown(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event?.settings?.votingSchedule, event?.settings?.votingOpenTime]);
 
   // Countdown timer for voting close
@@ -157,6 +158,7 @@ export default function EventPublicPage() {
 
     // No countdown needed (manual mode, not closed)
     setVotingCountdown(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event?.settings?.votingClosed, event?.settings?.votingCloseMode, event?.settings?.votingCloseTime]);
 
   const attendeeId = getAttendeeId();
@@ -224,6 +226,7 @@ export default function EventPublicPage() {
       }
     }, 15000); // Poll every 15 seconds for new messages
     return () => clearInterval(msgPollInterval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, loading, attendeeId]);
 
   // Ranked-choice data polling
@@ -322,6 +325,7 @@ export default function EventPublicPage() {
       setLoading(false);
     }
     init();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchEvent, fetchRequests]);
 
   async function handleSearch() {
@@ -357,10 +361,6 @@ export default function EventPublicPage() {
     setManualTitle('');
     setManualArtist('');
     setShowManualEntry(false);
-  }
-
-  function isExplicitBlocked() {
-    return event && event.settings && event.settings.blockExplicit !== false;
   }
 
   async function handleSubmitFeedback(e) {

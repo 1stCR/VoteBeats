@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Save, ArrowLeft, CheckCircle, Shield, ShieldCheck, ShieldOff, Lock, Eye, EyeOff, Bell, Volume2, Sliders, Music, Link2, Unlink2, ExternalLink, BookOpen, RotateCcw, Globe, Server, ShieldAlert, Copy, RefreshCw, ChevronDown, ChevronUp, AlertCircle  } from 'lucide-react';
+import { User, Mail, Save, ArrowLeft, CheckCircle, Shield, ShieldCheck, ShieldOff, Lock, Eye, EyeOff, Bell, Volume2, Sliders, Music, Link2, Unlink2, ExternalLink, BookOpen, RotateCcw, Globe, Server, ShieldAlert, Copy, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../config/api';
 import { resetOnboarding } from '../components/OnboardingWalkthrough';
